@@ -1,0 +1,8 @@
+<material>
+    <technique name="Techniques/WaterHighlight.xml" />
+    <texture unit="diffuse" name="Textures/water_highlight.png" />
+    <texture unit="normal" name="Textures/water_mask.png" />
+    <parameter name="FlowSpeedX" value="0.02" />
+    <parameter name="FlowSpeedY" value="0.08" />
+    <parameter name="HighlightIntensity" value="1.0" />
+</material>

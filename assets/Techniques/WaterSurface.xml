@@ -1,0 +1,3 @@
+<technique vs="WaterSurface" ps="WaterSurface">
+    <pass name="base" />
+</technique>
