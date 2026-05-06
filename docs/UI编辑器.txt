@@ -1,0 +1,410 @@
+# AI 指南：UI 编辑器构建手册
+读者：AI 开发助手
+当用户要求做一个 UI 编辑器时，按本手册执行。
+本手册与引擎无关，适用于任何支持 2D 渲染 + 鼠标输入的环境。
+---
+## §1 架构总览
+UI 编辑器 = 数据模型 + 渲染器 + 交互系统 + 命令系统 + 序列化
+```
+用户操作 → 交互系统 → 命令系统 → 数据模型 → 渲染器 → 屏幕
+                         ↕
+                    撤销重做栈
+```
+铁律：所有修改必须经过命令系统，不要直接改数据模型。
+---
+## §2 数据模型
+### 2.1 节点结构
+每个 UI 组件是一个节点，所有节点组成树形结构：
+```
+EditorNode = {
+    id           string,       -- 唯一标识（UUID 或自增 ID）
+    type         string,       -- 组件类型：panel, button, text, image, slider
+    name         string,       -- 用户可改的显示名：登录按钮
+    parent_id    stringnil,   -- 父节点 ID（根节点为 nil）
+    children     string[],     -- 子节点 ID 列表（有序）
+    -- 变换
+    x            number,       -- 相对于父节点的 X 偏移
+    y            number,       -- 相对于父节点的 Y 偏移
+    width        number,       -- 宽度
+    height       number,       -- 高度
+    rotation     number,       -- 旋转角度（度，可选，默认 0）
+    -- 外观
+    style        table,        -- 样式属性（见 §2.2）
+    -- 元数据
+    locked       boolean,      -- 锁定后不可选中移动
+    visible      boolean,      -- 是否可见
+}
+```
+### 2.2 样式属性
+```
+style = {
+    -- 背景
+    bg_color         string,   -- 背景色 #RRGGBB 或 #RRGGBBAA
+    bg_image         string,   -- 背景图路径（可选）
+    border_color     string,   -- 边框色
+    border_width     number,   -- 边框宽度
+    corner_radius    number,   -- 圆角半径
+    -- 文本（仅 textbutton 类型）
+    text             string,   -- 文本内容
+    font_size        number,   -- 字号
+    font_color       string,   -- 字体颜色
+    text_align       string,   -- left  center  right
+    -- 透明度
+    opacity          number,   -- 0.0 ~ 1.0
+}
+```
+### 2.3 编辑器状态
+```
+EditorState = {
+    nodes            tablestring, EditorNode,  -- 所有节点（ID → 节点）
+    root_id          string,                     -- 根画布节点 ID
+    selection         string[],                   -- 当前选中的节点 ID 列表
+    clipboard        EditorNode[],               -- 剪贴板
+    undo_stack       Command[],                  -- 撤销栈
+    redo_stack       Command[],                  -- 重做栈
+    -- 画布视图
+    canvas_offset_x  number,                     -- 画布平移 X
+    canvas_offset_y  number,                     -- 画布平移 Y
+    canvas_zoom      number,                     -- 缩放比例（1.0 = 100%）
+    -- 交互状态
+    drag_mode        stringnil,                 -- nil  move  resize  select_box
+    drag_start_x     number,
+    drag_start_y     number,
+    resize_handle    stringnil,                 -- tltrblbrtblr
+}
+```
+---
+## §3 模块拆分
+文件组织（按职责拆分，不要写成单文件）：
+```
+ui_editor
+├── data
+│   ├── node.lua            -- EditorNode 定义 + 工厂方法
+│   ├── state.lua           -- EditorState 管理（增删查改节点）
+│   └── defaults.lua        -- 各组件类型的默认属性
+│
+├── commands
+│   ├── command.lua          -- Command 基类（execute  undo）
+│   ├── move_command.lua     -- 移动节点
+│   ├── resize_command.lua   -- 缩放节点
+│   ├── add_command.lua      -- 添加节点
+│   ├── delete_command.lua   -- 删除节点
+│   ├── modify_command.lua   -- 修改属性
+│   └── batch_command.lua    -- 批量命令（多个操作合为一次撤销）
+│
+├── interaction
+│   ├── selection.lua        -- 选中逻辑（单选多选框选）
+│   ├── drag.lua             -- 拖拽移动
+│   ├── resize.lua           -- 拖拽缩放
+│   ├── snap.lua             -- 对齐吸附（辅助线）
+│   └── hotkeys.lua          -- 快捷键绑定
+│
+├── render
+│   ├── canvas.lua           -- 画布渲染（网格背景 + 所有节点）
+│   ├── node_renderer.lua    -- 单个节点渲染（按 type 分发）
+│   ├── selection_overlay.lua -- 选中高亮 + 缩放手柄
+│   └── guides.lua           -- 对齐辅助线渲染
+│
+├── panels
+│   ├── component_panel.lua  -- 左侧组件面板
+│   ├── property_panel.lua   -- 右侧属性面板
+│   ├── layer_panel.lua      -- 图层层级面板
+│   └── toolbar.lua          -- 顶部工具栏
+│
+├── serialization
+│   ├── save.lua             -- 导出为 JSON
+│   ├── load.lua             -- 从 JSON 导入
+│   └── code_export.lua      -- 导出为可运行代码（可选）
+│
+└── main.lua                 -- 入口：初始化 + 事件绑定 + 主循环
+```
+---
+## §4 命令系统（核心）
+必须实现，不可跳过。 没有命令系统的编辑器无法撤销，等于不能用。
+### 4.1 命令接口
+```lua
+Command = {
+    execute = function(self, state) end,  -- 执行操作
+    undo    = function(self, state) end,  -- 撤销操作
+    name    = 描述文字,                  -- 用于显示（可选）
+}
+```
+### 4.2 命令管理器
+```lua
+function execute_command(state, cmd)
+    cmdexecute(state)
+    table.insert(state.undo_stack, cmd)
+    state.redo_stack = {}  -- 新操作清空重做栈
+end
+function undo(state)
+    local cmd = table.remove(state.undo_stack)
+    if cmd then
+        cmdundo(state)
+        table.insert(state.redo_stack, cmd)
+    end
+end
+function redo(state)
+    local cmd = table.remove(state.redo_stack)
+    if cmd then
+        cmdexecute(state)
+        table.insert(state.undo_stack, cmd)
+    end
+end
+```
+### 4.3 命令示例：移动
+```lua
+MoveCommand = {
+    node_ids = {},          -- 被移动的节点 ID 列表
+    dx = 0, dy = 0,         -- 偏移量
+    old_positions = {},     -- 移动前的位置快照
+}
+function MoveCommandexecute(state)
+    self.old_positions = {}
+    for _, id in ipairs(self.node_ids) do
+        local node = state.nodes[id]
+        self.old_positions[id] = { x = node.x, y = node.y }
+        node.x = node.x + self.dx
+        node.y = node.y + self.dy
+    end
+end
+function MoveCommandundo(state)
+    for _, id in ipairs(self.node_ids) do
+        local pos = self.old_positions[id]
+        state.nodes[id].x = pos.x
+        state.nodes[id].y = pos.y
+    end
+end
+```
+### 4.4 拖拽期间不要每帧创建命令
+```
+鼠标按下 → 记录起始位置
+拖拽中   → 直接修改节点位置（临时，不创建命令）
+鼠标松开 → 计算总偏移量 → 创建一个 MoveCommand → execute
+```
+这样一次拖拽 = 一次撤销，而不是几百个微小偏移命令。
+---
+## §5 交互系统
+### 5.1 坐标转换
+画布有平移和缩放，鼠标坐标需要转换：
+```lua
+-- 屏幕坐标 → 画布坐标
+function screen_to_canvas(state, sx, sy)
+    local cx = (sx - state.canvas_offset_x)  state.canvas_zoom
+    local cy = (sy - state.canvas_offset_y)  state.canvas_zoom
+    return cx, cy
+end
+-- 画布坐标 → 屏幕坐标
+function canvas_to_screen(state, cx, cy)
+    local sx = cx  state.canvas_zoom + state.canvas_offset_x
+    local sy = cy  state.canvas_zoom + state.canvas_offset_y
+    return sx, sy
+end
+```
+### 5.2 命中检测
+```lua
+-- 判断画布坐标 (cx, cy) 是否在节点矩形内
+function hit_test(node, cx, cy)
+    return cx = node.x
+       and cx = node.x + node.width
+       and cy = node.y
+       and cy = node.y + node.height
+end
+-- 从最上层往下找第一个命中的节点（后渲染的在上面）
+function find_node_at(state, cx, cy)
+    -- 反向遍历（后添加的在上面）
+    local ordered = get_render_order(state)
+    for i = #ordered, 1, -1 do
+        local node = state.nodes[ordered[i]]
+        if not node.locked and node.visible and hit_test(node, cx, cy) then
+            return node.id
+        end
+    end
+    return nil
+end
+```
+### 5.3 选中逻辑
+```
+点击空白处          → 清空选中
+点击节点            → 单选该节点
+Shift + 点击节点    → 切换该节点的选中状态（多选）
+拖拽空白处          → 框选模式（选中矩形内所有节点）
+```
+### 5.4 缩放手柄
+选中节点后显示 8 个手柄（四角 + 四边中点）：
+```
+tl ──── t ──── tr
+│                │
+l                r
+│                │
+bl ──── b ──── br
+```
+每个手柄是一个小矩形（如 8x8 像素），命中时进入 resize 模式。
+缩放约束：
+- 按住 Shift → 保持宽高比
+- 按住 Alt → 以中心点为锚点缩放
+- 最小尺寸限制（如 10x10），防止缩放到负数
+### 5.5 对齐吸附
+拖拽时检测当前节点的边中线是否接近其他节点的边中线：
+```
+吸附检测的 5 条线（被拖拽的节点）：
+  左边  水平中线  右边  上边  垂直中线  下边
+对每条线，检测是否和其他节点的对应线距离  阈值（如 5 像素）
+如果是 → 吸附到该位置 + 画辅助线
+```
+---
+## §6 渲染
+### 6.1 渲染顺序
+```
+1. 画布背景（网格）
+2. 所有节点（按层级顺序，父先子后，同级按 children 数组顺序）
+3. 选中高亮 + 缩放手柄
+4. 对齐辅助线
+5. 框选矩形（如果正在框选）
+6. UI 面板（组件面板  属性面板  工具栏）— 这些在画布之上
+```
+### 6.2 节点渲染分发
+```lua
+local renderers = {
+    panel  = render_panel,
+    button = render_button,
+    text   = render_text,
+    image  = render_image,
+    slider = render_slider,
+}
+function render_node(node)
+    local fn = renderers[node.type]
+    if fn then fn(node) end
+    -- 递归渲染子节点
+    for _, child_id in ipairs(node.children) do
+        render_node(state.nodes[child_id])
+    end
+end
+```
+### 6.3 画布网格
+```lua
+function render_grid(state, canvas_width, canvas_height)
+    local grid_size = 20  state.canvas_zoom
+    local offset_x = state.canvas_offset_x % grid_size
+    local offset_y = state.canvas_offset_y % grid_size
+    -- 用半透明线画网格
+    set_color(0.3, 0.3, 0.3, 0.3)
+    for x = offset_x, canvas_width, grid_size do
+        draw_line(x, 0, x, canvas_height)
+    end
+    for y = offset_y, canvas_height, grid_size do
+        draw_line(0, y, canvas_width, y)
+    end
+end
+```
+---
+## §7 属性面板
+### 7.1 属性分组
+```
+基础
+  ├─ 名称          [文本输入]
+  ├─ 类型          [只读标签]
+  ├─ 可见          [复选框]
+  └─ 锁定          [复选框]
+变换
+  ├─ X  Y         [数值输入]
+  ├─ 宽度  高度    [数值输入]
+  └─ 旋转          [数值输入 + 滑块]
+外观
+  ├─ 背景色        [颜色选择器]
+  ├─ 边框色        [颜色选择器]
+  ├─ 边框宽度      [数值输入]
+  ├─ 圆角          [数值输入]
+  └─ 透明度        [滑块]
+文本（仅 textbutton）
+  ├─ 内容          [文本输入]
+  ├─ 字号          [数值输入]
+  ├─ 字体颜色      [颜色选择器]
+  └─ 对齐          [三选一按钮：左中右]
+```
+### 7.2 属性修改 → 命令
+属性面板的每次修改必须走命令系统：
+```lua
+-- 用户在属性面板改了字号
+function on_property_change(node_id, key, old_value, new_value)
+    local cmd = ModifyCommandnew(node_id, key, old_value, new_value)
+    execute_command(state, cmd)
+end
+```
+数值输入框优化：用户拖拽数值滑块时不要每帧创建命令，松开时创建一个。
+---
+## §8 序列化
+### 8.1 保存格式（JSON）
+```json
+{
+    version 1,
+    canvas { width 1920, height 1080 },
+    nodes [
+        {
+            id node_1,
+            type panel,
+            name 根面板,
+            parent_id null,
+            children [node_2, node_3],
+            x 0, y 0, width 400, height 300,
+            style { bg_color #2A2A2A, corner_radius 8 }
+        },
+        {
+            id node_2,
+            type button,
+            name 登录按钮,
+            parent_id node_1,
+            children [],
+            x 100, y 200, width 200, height 50,
+            style { text 登录, bg_color #4A90D9, font_size 18 }
+        }
+    ]
+}
+```
+### 8.2 代码导出（可选）
+把节点树转换成可运行的 UI 代码。输出格式取决于目标框架。
+核心逻辑：递归遍历节点树，为每个节点生成对应的构造代码。
+---
+## §9 实现顺序（必须遵守）
+不要跳步，每步完成后 build + 测试再进入下一步。
+阶段  内容  验收标准
+---------------------
+1  数据模型 + 状态管理  能创建删除查找节点
+2  画布渲染（网格 + 矩形节点）  屏幕上能看到节点
+3  坐标转换 + 命中检测  点击节点能识别
+4  选中逻辑 + 高亮渲染  点击节点出现蓝色边框
+5  命令系统 + 撤销重做  Ctrl+ZY 能正常工作
+6  组件面板（点击添加）  点左栏按钮→ 画布出现新节点
+7  拖拽移动  拖拽节点移动，松开后可撤销
+8  属性面板（查看 + 修改）  选中节点 → 右栏显示属性 → 修改生效
+9  拖拽缩放 + 手柄  拖角手柄缩放节点
+10  多选 + 框选  Shift 多选 + 拖空白处框选
+11  删除 + 复制粘贴  DeleteCtrl+CCtrl+V
+12  保存加载 JSON  导出文件 → 重新导入 → 布局一致
+13  对齐吸附 + 辅助线  拖拽接近时出现辅助线并吸附
+14  层级面板  显示节点树，可拖拽调整顺序
+15  视觉打磨  深色主题 + 图标 + 动画过渡
+---
+## §10 注意事项
+### 10.1 性能
+- 节点数  100 时不需要优化，直接全量重绘
+- 超过 100 个节点 → 脏标记机制（只重绘变化的部分）
+- 属性面板不要每帧重建，只在选中变化时更新
+### 10.2 ID 生成
+- 用自增整数即可（`node_1`, `node_2`, ...）
+- 保持全局计数器，删除节点不回收 ID
+- 确保 ID 在保存加载后不重复
+### 10.3 父子关系
+- 移动父节点时，子节点跟随移动（因为子节点坐标是相对父节点的）
+- 删除父节点时，递归删除所有子节点
+- 拖拽改变父子关系时（从层级面板），要更新坐标（从旧父节点的相对坐标转换到新父节点的相对坐标）
+### 10.4 多选操作
+- 移动多个选中节点 → 一个 BatchCommand 包含多个 MoveCommand
+- 删除多个选中节点 → 一个 BatchCommand 包含多个 DeleteCommand
+- 确保一次撤销能还原整个批量操作
+### 10.5 画布导航
+- 鼠标中键拖拽 → 画布平移
+- 滚轮 → 画布缩放（以鼠标位置为中心点）
+- 缩放范围限制：25% ~ 400%
+- 提供适配画布按钮（自动缩放到全部节点可见）
+---
+本手册供 AI 读取，指导 UI 编辑器的完整实现。

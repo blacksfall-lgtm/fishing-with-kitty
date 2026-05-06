@@ -1,12 +1,93 @@
 -- ============================================================================
 -- AquariumSystem: 鱼缸系统 - 放入鱼获得全局Buff
 -- ============================================================================
-local GameConfig = require("config.GameConfig")
-local GameState  = require("state.GameState")
+local GameConfig     = require("config.GameConfig")
+local GameState      = require("state.GameState")
+local AffixSystem    = require("systems.AffixSystem")
+local ResearchSystem = require("systems.ResearchSystem")
 
 local AquariumSystem = {}
 
---- 放入鱼到鱼缸
+AquariumSystem.onIncome = nil  -- function(totalGold) 收入回调
+
+--- 每帧更新：定期产出金币
+function AquariumSystem:update(dt)
+    -- 检查是否有鱼在鱼缸中
+    local hasFish = false
+    for i = 1, GameState.unlockedAquariumSlots do
+        if GameState.aquariumSlots[i] then
+            hasFish = true
+            break
+        end
+    end
+    if not hasFish then
+        GameState.aquariumIncomeTimer = 0
+        return
+    end
+
+    local interval = GameConfig.AQUARIUM.INCOME.INTERVAL
+    GameState.aquariumIncomeTimer = (GameState.aquariumIncomeTimer or 0) + dt
+
+    if GameState.aquariumIncomeTimer >= interval then
+        GameState.aquariumIncomeTimer = GameState.aquariumIncomeTimer - interval
+
+        -- 计算总收入
+        local totalGold = 0
+        for i = 1, GameState.unlockedAquariumSlots do
+            local slot = GameState.aquariumSlots[i]
+            if slot then
+                local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
+                local qualityCfg = GameConfig.QUALITY[slot.qualityId]
+                local qualityMulti = qualityCfg and qualityCfg.multiplier or 1.0
+                local baseValue = fishCfg and fishCfg.baseValue or 10
+                local income = GameConfig.AQUARIUM.INCOME.BASE_PER_FISH
+                    + baseValue * GameConfig.AQUARIUM.INCOME.VALUE_RATIO
+                -- 词条加成
+                local affixMulti = 1.0
+                if slot.affixes and #slot.affixes > 0 then
+                    affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
+                end
+                totalGold = totalGold + math.floor(income * qualityMulti * affixMulti)
+            end
+        end
+
+        -- 研发: 鱼缸收益加成
+        totalGold = math.floor(totalGold * (1 + ResearchSystem.getAquariumIncomeBonus()))
+
+        if totalGold > 0 then
+            GameState:addCoins(totalGold)
+            print(string.format("[AquariumSystem] 鱼缸收入: +%d 金币", totalGold))
+            if self.onIncome then
+                self.onIncome(totalGold)
+            end
+        end
+    end
+end
+
+--- 获取当前每周期预估收入
+function AquariumSystem:getEstimatedIncome()
+    local totalGold = 0
+    for i = 1, GameState.unlockedAquariumSlots do
+        local slot = GameState.aquariumSlots[i]
+        if slot then
+            local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
+            local qualityCfg = GameConfig.QUALITY[slot.qualityId]
+            local qualityMulti = qualityCfg and qualityCfg.multiplier or 1.0
+            local baseValue = fishCfg and fishCfg.baseValue or 10
+            local income = GameConfig.AQUARIUM.INCOME.BASE_PER_FISH
+                + baseValue * GameConfig.AQUARIUM.INCOME.VALUE_RATIO
+            -- 词条加成
+            local affixMulti = 1.0
+            if slot.affixes and #slot.affixes > 0 then
+                affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
+            end
+            totalGold = totalGold + math.floor(income * qualityMulti * affixMulti)
+        end
+    end
+    return totalGold
+end
+
+--- 放入鱼到鱼缸（普通鱼，无词条）
 function AquariumSystem:placeFish(slotIndex, fishId, qualityId)
     if slotIndex < 1 or slotIndex > GameState.unlockedAquariumSlots then
         return false, "槽位未解锁"
@@ -34,15 +115,57 @@ function AquariumSystem:placeFish(slotIndex, fishId, qualityId)
     return true
 end
 
+--- 放入词条鱼到鱼缸
+function AquariumSystem:placeFishWithAffix(slotIndex, fishId, qualityId, uid)
+    if slotIndex < 1 or slotIndex > GameState.unlockedAquariumSlots then
+        return false, "槽位未解锁"
+    end
+    if GameState.aquariumSlots[slotIndex] then
+        return false, "槽位已被占用"
+    end
+
+    -- 先读取词条数据，再删除个体记录
+    local indiv = GameState:getIndividualFish(uid)
+    local affixes = indiv and indiv.affixes or nil
+
+    -- 消耗个体鱼（内部也会 removeFish）
+    if not GameState:removeIndividualFish(uid) then
+        return false, "没有这条鱼"
+    end
+
+    GameState.aquariumSlots[slotIndex] = {
+        fishId = fishId,
+        qualityId = qualityId,
+        affixes = affixes,
+        uid = uid,  -- 保留原uid用于追溯
+    }
+
+    local fishCfg = GameConfig.FISH_BY_ID[fishId]
+    local summary = affixes and AffixSystem.getAffixSummary(affixes) or ""
+    print(string.format("[AquariumSystem] 鱼缸槽位%d: 放入词条鱼 %s (品质%d) [%s]",
+        slotIndex, fishCfg.displayName, qualityId, summary))
+
+    self:recalculateBuffs()
+    return true
+end
+
 --- 取出鱼（归还到背包）
 function AquariumSystem:removeFish(slotIndex)
     local slot = GameState.aquariumSlots[slotIndex]
     if not slot then return false end
 
+    -- 归还鱼到背包
     GameState:addFish(slot.fishId, slot.qualityId)
-    GameState.aquariumSlots[slotIndex] = nil
 
-    print("[AquariumSystem] 取出鱼从鱼缸槽位" .. slotIndex)
+    -- 如果有词条，重建个体记录
+    if slot.affixes and #slot.affixes > 0 then
+        local newUid = GameState:addIndividualFish(slot.fishId, slot.qualityId, slot.affixes)
+        print(string.format("[AquariumSystem] 取出词条鱼 uid=%d 从鱼缸槽位%d", newUid, slotIndex))
+    else
+        print("[AquariumSystem] 取出鱼从鱼缸槽位" .. slotIndex)
+    end
+
+    GameState.aquariumSlots[slotIndex] = nil
     self:recalculateBuffs()
     return true
 end
@@ -62,7 +185,12 @@ function AquariumSystem:recalculateBuffs()
             local buffDef = GameConfig.AQUARIUM.BUFF_PER_TYPE[fishCfg.fishType]
             if buffDef then
                 local qualityMulti = GameConfig.AQUARIUM.QUALITY_BUFF_MULTI[slot.qualityId] or 1
-                local buffValue = buffDef.base * qualityMulti
+                -- 词条鱼的buff也乘以词条加成
+                local affixMulti = 1.0
+                if slot.affixes and #slot.affixes > 0 then
+                    affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
+                end
+                local buffValue = buffDef.base * qualityMulti * affixMulti
                 GameState.cachedBuffs[buffDef.type] = GameState.cachedBuffs[buffDef.type] + buffValue
             end
         end
@@ -78,7 +206,9 @@ end
 --- 解锁新槽位
 function AquariumSystem:unlockSlot()
     local next = GameState.unlockedAquariumSlots + 1
-    if next > GameConfig.AQUARIUM.MAX_SLOTS then
+    -- 研发: 鱼缸扩建增加槽位上限
+    local maxSlots = GameConfig.AQUARIUM.MAX_SLOTS + ResearchSystem.getAquariumSlotsBonus()
+    if next > maxSlots then
         return false, "已达最大槽位"
     end
     local cost = GameConfig.AQUARIUM.SLOT_UNLOCK_COST[next] or 0

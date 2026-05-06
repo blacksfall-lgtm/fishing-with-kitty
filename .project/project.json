@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/project.schema.json",
+  "project_id": "p_r7sd",
+  "author": {
+    "id": "583798678"
+  },
+  "entry": "main.lua",
+  "version": "1.0.2",
+  "taptap_publish": {
+    "title": "钓鱼大亨",
+    "description": "在广阔的海域中滑动捕鱼，收集各种稀有鱼类，经营你的渔业帝国！探索近海与外海，挑战传说级Boss鱼，解锁船员与装备，成为真正的钓鱼大亨！",
+    "category": "simulation",
+    "screen_orientation": "portrait",
+    "collection_type": "sce",
+    "trial_note": "一款轻松有趣的钓鱼模拟游戏，滑动即可捕鱼，希望大家玩得开心！",
+    "app_platforms": "1,2",
+    "developer_id": 378451,
+    "app_id": 849447,
+    "miniapp_id": "tapmcdny510cid2rah"
+  },
+  "assets": {
+    "icon": "",
+    "screenshots": [],
+    "promotional_image": ""
+  },
+  "test_qrcode": {
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/p_r7sd_1777283249801.png",
+    "generated_at": "2026-04-27T09:47:29.910Z"
+  },
+  "metadata": {
+    "updated_at": "2026-04-27T09:47:29.910Z"
+  }
+}

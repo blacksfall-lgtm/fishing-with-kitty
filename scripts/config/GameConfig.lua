@@ -31,13 +31,28 @@ GameConfig.FISH_TYPE = {
 
 -- ========== 海域定义 ==========
 GameConfig.ZONE = {
-    NEARSHORE = "nearshore", -- 近海
-    OFFSHORE  = "offshore",  -- 外海
+    NEARSHORE  = "nearshore",  -- 近海
+    OFFSHORE   = "offshore",   -- 外海
+    DEEPOCEAN  = "deepocean",  -- 深海
+    ABYSS      = "abyss",      -- 深渊
+    LEGENDARY  = "legendary",  -- 传说之海
 }
 
 GameConfig.ZONE_DISPLAY = {
     nearshore = "近海",
     offshore  = "外海",
+    deepocean = "深海",
+    abyss     = "深渊",
+    legendary = "传说之海",
+}
+
+-- 海域解锁费用 (nearshore 免费, 其余需金币)
+GameConfig.ZONE_UNLOCK_COST = {
+    nearshore = 0,
+    offshore  = 500,
+    deepocean = 2000,
+    abyss     = 8000,
+    legendary = 30000,
 }
 
 -- ========== 10种鱼配置 (MVP: 6近海+4外海) ==========
@@ -118,7 +133,7 @@ GameConfig.FISH = {
 
 -- 快速查找表
 GameConfig.FISH_BY_ID = {}
-GameConfig.FISH_BY_ZONE = { nearshore = {}, offshore = {} }
+GameConfig.FISH_BY_ZONE = { nearshore = {}, offshore = {}, deepocean = {}, abyss = {}, legendary = {} }
 for _, fish in ipairs(GameConfig.FISH) do
     GameConfig.FISH_BY_ID[fish.id] = fish
     table.insert(GameConfig.FISH_BY_ZONE[fish.zone], fish)
@@ -168,37 +183,47 @@ for _, sushi in ipairs(GameConfig.SUSHI) do
     GameConfig.SUSHI_BY_ID[sushi.id] = sushi
 end
 
--- ========== 3种饵料 ==========
-GameConfig.BAIT = {
-    {
-        id = 1, name = "basic", displayName = "基础鱼饵", icon = "🪱",
-        cost = 0,  -- 免费
-        modifiers = {},  -- 无加成
-        desc = "通用饵料，无特殊效果",
-    },
-    {
-        id = 2, name = "shrimp", displayName = "虾肉饵", icon = "🦐",
-        cost = 50,
-        modifiers = { producer = 1.5 },  -- 产出型鱼概率x1.5
-        desc = "吸引产出型鱼",
-    },
-    {
-        id = 3, name = "seaweed", displayName = "海藻饵", icon = "🌿",
-        cost = 80,
-        modifiers = { amplifier = 1.5, qualityBoost = 0.1 },  -- 增幅型x1.5, 品质提升10%
-        desc = "吸引增幅型鱼，提升品质概率",
-    },
-}
+-- ========== 菜谱等级系统 ==========
+GameConfig.RECIPE_MAX_LEVEL = 10
+--- 每级售价加成 (level 1 = +0%, level 2 = +15%, level 3 = +30%, ...)
+GameConfig.RECIPE_PRICE_PER_LEVEL = 0.15
+--- 升级费用 = baseCost * level^1.4
+GameConfig.RECIPE_UPGRADE_BASE_COST = { 100, 150, 200, 500, 800 }  -- 按 recipeId 索引
 
-GameConfig.BAIT_BY_ID = {}
-for _, bait in ipairs(GameConfig.BAIT) do
-    GameConfig.BAIT_BY_ID[bait.id] = bait
+--- 获取菜谱升级金币费用
+function GameConfig.getRecipeUpgradeCost(recipeId, currentLevel)
+    local base = GameConfig.RECIPE_UPGRADE_BASE_COST[recipeId] or 200
+    return math.floor(base * currentLevel ^ 1.4)
+end
+
+--- 获取菜谱升级所需鱼材料 (与制作配方同类鱼, 数量随等级递增)
+--- @return table[] {{fishId, count, displayName, icon}, ...}
+function GameConfig.getRecipeUpgradeFish(recipeId, currentLevel)
+    local recipe = GameConfig.SUSHI_BY_ID[recipeId]
+    if not recipe then return {} end
+    local result = {}
+    for _, ing in ipairs(recipe.ingredients) do
+        local fish = GameConfig.FISH_BY_ID[ing.fishId]
+        table.insert(result, {
+            fishId = ing.fishId,
+            count  = ing.count * (currentLevel + 1),
+            displayName = fish and fish.displayName or "???",
+            icon   = fish and fish.icon or "🐟",
+        })
+    end
+    return result
+end
+
+--- 获取菜谱等级售价倍率
+function GameConfig.getRecipePriceMultiplier(level)
+    return 1 + (level - 1) * GameConfig.RECIPE_PRICE_PER_LEVEL
 end
 
 -- ========== 4种船员类型 ==========
 GameConfig.CREW = {
     {
         id = 1, type = "fisher", displayName = "钓鱼手", icon = "🎣",
+        portrait = "image/crew_fisher_20260427080355.png",
         desc = "提升自动捕鱼速度",
         baseBonus = 0.15,       -- 基础: 捕鱼速度+15%
         bonusPerLevel = 0.03,   -- 每级+3%
@@ -207,6 +232,7 @@ GameConfig.CREW = {
     },
     {
         id = 2, type = "netter", displayName = "捞网手", icon = "🥅",
+        portrait = "image/crew_netter_20260427080343.png",
         desc = "有概率额外捕获一条鱼",
         baseBonus = 0.10,       -- 基础: 10%双倍捕获概率
         bonusPerLevel = 0.02,
@@ -215,6 +241,7 @@ GameConfig.CREW = {
     },
     {
         id = 3, type = "harvester", displayName = "收获手", icon = "📦",
+        portrait = "image/crew_harvester_20260427080344.png",
         desc = "提升鱼仓容量",
         baseBonus = 10,         -- 基础: 容量+10
         bonusPerLevel = 5,
@@ -223,6 +250,7 @@ GameConfig.CREW = {
     },
     {
         id = 4, type = "baiter", displayName = "饵料手", icon = "🧪",
+        portrait = "image/crew_baiter_20260427080359.png",
         desc = "有概率不消耗饵料",
         baseBonus = 0.10,       -- 基础: 10%不消耗饵料
         bonusPerLevel = 0.02,
@@ -240,11 +268,30 @@ end
 
 -- ========== 养殖系统 ==========
 GameConfig.BREEDING = {
-    MAX_SLOTS = 4,           -- 最大养殖槽
-    INITIAL_SLOTS = 2,       -- 初始槽位
-    BASE_PRODUCE_TIME = 60,  -- 基础产出时间(秒)
+    MAX_SLOTS = 16,          -- 最大养殖槽
+    INITIAL_SLOTS = 4,       -- 初始槽位
+    BASE_PRODUCE_TIME = 180, -- 基础产出时间(秒)
     QUALITY_TIME_MULTI = { 1.0, 1.3, 1.8, 2.5, 4.0 },  -- 品质越高产出越慢
-    SLOT_UNLOCK_COST = { 0, 0, 2000, 5000 },  -- 第3/4槽解锁费用
+    SLOT_UNLOCK_COST = {     -- 每个槽解锁费用 (前4个免费)
+        0, 0, 0, 0,
+        1000, 1500, 2000, 3000,
+        4000, 5000, 7000, 10000,
+        15000, 20000, 30000, 50000,
+    },
+}
+
+-- 鱼图片映射 (fishName → 图片路径)
+GameConfig.FISH_IMAGE = {
+    sardine    = "image/fish_sardine_20260426161404.png",
+    clownfish  = "image/fish_clownfish_20260426154607.png",
+    bubblefish = "image/fish_bubblefish_20260426161340.png",
+    coralfish  = "image/fish_coralfish_20260426154605.png",
+    shellfish  = "image/fish_shellfish_20260426154603.png",
+    bluefin    = "image/fish_bluefin_20260426155456.png",
+    flyingfish = "image/fish_flyingfish_20260426155458.png",
+    silverfish = "image/fish_silverfish_20260426155454.png",
+    gemfish    = "image/fish_gemfish_20260426155453.png",
+    octopus    = "image/fish_octopus_20260426155724.png",
 }
 
 -- ========== 鱼缸系统 ==========
@@ -261,24 +308,312 @@ GameConfig.AQUARIUM = {
     },
     -- 品质对Buff的倍率
     QUALITY_BUFF_MULTI = { 1.0, 1.3, 1.8, 3.0, 5.0 },
+    -- 金币收入配置
+    INCOME = {
+        INTERVAL = 30,        -- 每30秒结算一次
+        BASE_PER_FISH = 5,    -- 每条鱼基础金币
+        VALUE_RATIO = 0.1,    -- baseValue 的比例加成
+    },
+}
+
+-- ========== 船只升级 ==========
+-- 渔船等级：决定所有装备的等级上限
+GameConfig.BOAT = {
+    MAX_LEVEL = 10,
+    -- 每级属性: { cost, equipCapLv = 装备等级上限, desc }
+    LEVELS = {
+        { cost = 0,     equipCapLv = 5,  desc = "破旧小渔船" },
+        { cost = 500,   equipCapLv = 10, desc = "修缮渔船" },
+        { cost = 1500,  equipCapLv = 15, desc = "结实木船" },
+        { cost = 4000,  equipCapLv = 20, desc = "快速帆船" },
+        { cost = 10000, equipCapLv = 25, desc = "远洋渔船" },
+        { cost = 25000, equipCapLv = 30, desc = "钢壳渔轮" },
+        { cost = 60000, equipCapLv = 40, desc = "现代渔船" },
+        { cost = 150000,equipCapLv = 50, desc = "高速拖网船" },
+        { cost = 350000,equipCapLv = 60, desc = "旗舰捕鱼船" },
+        { cost = 800000,equipCapLv = 99, desc = "传奇海王号" },
+    },
+}
+
+-- ========== 装备升级 ==========
+-- 4种装备: 鱼竿/渔网/鱼饵/鱼灯, 等级上限由渔船等级决定
+GameConfig.EQUIP = {
+    -- 装备列表 (顺序即UI显示顺序)
+    LIST = {
+        {
+            id = "rod",
+            displayName = "鱼竿",
+            desc = "自动钓鱼速度",
+            icon = "image/fishing_rod_20260428044026.png",
+            -- 升级费用 = baseCost * level^costScale
+            baseCost = 100,
+            costScale = 1.35,
+            -- 每级效果: fishSpeed = 1.0 + level * bonusPerLv
+            bonusPerLv = 0.08,
+            bonusDesc = function(lv) return string.format("×%.1f", 1.0 + lv * 0.08) end,
+        },
+        {
+            id = "net",
+            displayName = "渔网",
+            desc = "捕获价值",
+            icon = "image/equip_net_20260428114735.png",
+            baseCost = 120,
+            costScale = 1.35,
+            bonusPerLv = 0.06,
+            bonusDesc = function(lv) return string.format("+%d%%", lv * 6) end,
+        },
+        {
+            id = "bait",
+            displayName = "鱼饵",
+            desc = "鱼最大数量",
+            icon = "image/bucket_cartoon_20260426152025.png",
+            baseCost = 100,
+            costScale = 1.30,
+            bonusPerLv = 3,
+            bonusDesc = function(lv) return string.format("+%d", lv * 3) end,
+        },
+        {
+            id = "lamp",
+            displayName = "鱼灯",
+            desc = "定向捕鱼",
+            icon = "image/equip_lamp_20260428114727.png",
+            baseCost = 150,
+            costScale = 1.40,
+            bonusPerLv = 0.03,
+            bonusDesc = function(lv) return string.format("+%d%%", lv * 3) end,
+        },
+    },
+}
+
+--- 获取装备升级费用
+function GameConfig.getEquipUpgradeCost(equipId, currentLevel)
+    for _, eq in ipairs(GameConfig.EQUIP.LIST) do
+        if eq.id == equipId then
+            return math.floor(eq.baseCost * (currentLevel + 1) ^ eq.costScale)
+        end
+    end
+    return 999999
+end
+
+--- 获取装备等级上限 (由渔船等级决定)
+function GameConfig.getEquipLevelCap(boatLevel)
+    local info = GameConfig.BOAT.LEVELS[boatLevel]
+    return info and info.equipCapLv or 5
+end
+
+-- 快速查找表
+GameConfig.EQUIP_BY_ID = {}
+for _, eq in ipairs(GameConfig.EQUIP.LIST) do
+    GameConfig.EQUIP_BY_ID[eq.id] = eq
+end
+
+-- ========== 鱼饵配置 ==========
+-- 鱼饵决定鱼影的尺寸分布: small=仅金币, medium/large=入背包
+GameConfig.BAIT = {
+    {
+        id = "normal", displayName = "普通鱼饵", icon = "🪱",
+        desc = "只能吸引小鱼",
+        sizeWeights = { small = 1.0, medium = 0, large = 0 },
+        unlockBaitLevel = 1,  -- bait 装备等级 >= 1 即可用(初始)
+    },
+    {
+        id = "sweet", displayName = "香甜鱼饵", icon = "🍬",
+        desc = "有几率吸引中型鱼",
+        sizeWeights = { small = 0.85, medium = 0.15, large = 0 },
+        unlockBaitLevel = 3,  -- bait 装备等级 >= 3
+    },
+    {
+        id = "shiny", displayName = "闪光鱼饵", icon = "✨",
+        desc = "能吸引中型甚至大型鱼",
+        sizeWeights = { small = 0.75, medium = 0.20, large = 0.05 },
+        unlockBaitLevel = 5,  -- bait 装备等级 >= 5
+    },
+}
+
+-- 快速查找
+GameConfig.BAIT_BY_ID = {}
+for _, bait in ipairs(GameConfig.BAIT) do
+    GameConfig.BAIT_BY_ID[bait.id] = bait
+end
+
+--- 判断鱼饵是否已解锁
+--- @param baitId string
+--- @return boolean
+function GameConfig.isBaitUnlocked(baitId)
+    local bait = GameConfig.BAIT_BY_ID[baitId]
+    if not bait then return false end
+    local GameState = require("state.GameState")
+    return (GameState.equipLevels.bait or 1) >= bait.unlockBaitLevel
+end
+
+-- ========== 研发系统 ==========
+GameConfig.RESEARCH_CATEGORIES = {
+    { id = "fishing",  displayName = "捕鱼", icon = "🎣" },
+    { id = "industry", displayName = "产业", icon = "🍣" },
+    { id = "aquarium", displayName = "鱼缸", icon = "🐠" },
+    { id = "breeding", displayName = "养殖", icon = "🐣" },
+}
+
+GameConfig.RESEARCH = {
+    -- ====== 捕鱼 (3项) ======
+    {
+        key = "fish_density", category = "fishing",
+        displayName = "鱼群密度", icon = "🐟",
+        desc = "提升常驻鱼影数量",
+        maxLevel = 8, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv1=×1.15, Lv8=×2.20
+        baseCost = 200, costScale = 1.6,
+    },
+    {
+        key = "wave_interval", category = "fishing",
+        displayName = "波次频率", icon = "🌊",
+        desc = "缩短鱼群波次间隔",
+        maxLevel = 6, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = -0.08,  -- 减少, Lv6=×0.52
+        baseCost = 300, costScale = 1.7,
+        floorPercent = 0.50,  -- 最低50%
+    },
+    {
+        key = "hold_capacity", category = "fishing",
+        displayName = "鱼仓扩容", icon = "📦",
+        desc = "增加鱼仓最大容量",
+        maxLevel = 8, effectType = "add",
+        baseEffect = 0, effectPerLevel = 10,  -- 每级+10容量
+        baseCost = 150, costScale = 1.5,
+    },
+    -- ====== 产业 (3项) ======
+    {
+        key = "sushi_price", category = "industry",
+        displayName = "寿司溢价", icon = "💰",
+        desc = "提升寿司售价",
+        maxLevel = 8, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = 0.10,  -- Lv8=×1.80
+        baseCost = 250, costScale = 1.6,
+    },
+    {
+        key = "synthesis_speed", category = "industry",
+        displayName = "合成加速", icon = "⚡",
+        desc = "加快寿司合成速度",
+        maxLevel = 6, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv6=×1.90
+        baseCost = 300, costScale = 1.7,
+    },
+    {
+        key = "npc_frequency", category = "industry",
+        displayName = "客流量", icon = "🐱",
+        desc = "缩短NPC到来间隔",
+        maxLevel = 6, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = -0.08,
+        baseCost = 350, costScale = 1.7,
+        floorPercent = 0.50,
+    },
+    -- ====== 鱼缸 (2项) ======
+    {
+        key = "aquarium_income", category = "aquarium",
+        displayName = "鱼缸收益", icon = "💎",
+        desc = "提升鱼缸金币产出",
+        maxLevel = 8, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = 0.12,  -- Lv8=×1.96
+        baseCost = 300, costScale = 1.6,
+    },
+    {
+        key = "aquarium_slots", category = "aquarium",
+        displayName = "鱼缸扩建", icon = "🏠",
+        desc = "增加鱼缸最大槽位",
+        maxLevel = 4, effectType = "add",
+        baseEffect = 0, effectPerLevel = 2,  -- 每级+2槽
+        baseCost = 500, costScale = 2.0,
+    },
+    -- ====== 养殖 (3项) ======
+    {
+        key = "breed_speed", category = "breeding",
+        displayName = "繁殖加速", icon = "⏱️",
+        desc = "加快养殖产出速度",
+        maxLevel = 6, effectType = "multiply",
+        baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv6=×1.90
+        baseCost = 300, costScale = 1.7,
+    },
+    {
+        key = "breed_slots", category = "breeding",
+        displayName = "养殖扩建", icon = "🏗️",
+        desc = "增加养殖最大槽位",
+        maxLevel = 4, effectType = "add",
+        baseEffect = 0, effectPerLevel = 2,
+        baseCost = 500, costScale = 2.0,
+    },
+    {
+        key = "quality_boost", category = "fishing",
+        displayName = "品质提升", icon = "⭐",
+        desc = "捕鱼时高品质概率提升",
+        maxLevel = 5, effectType = "add",
+        baseEffect = 0, effectPerLevel = 1,  -- 每级+1 (权重偏移值)
+        baseCost = 400, costScale = 1.8,
+    },
+}
+
+-- 快速查找表
+GameConfig.RESEARCH_BY_KEY = {}
+GameConfig.RESEARCH_BY_CATEGORY = {}
+for _, cat in ipairs(GameConfig.RESEARCH_CATEGORIES) do
+    GameConfig.RESEARCH_BY_CATEGORY[cat.id] = {}
+end
+for _, r in ipairs(GameConfig.RESEARCH) do
+    GameConfig.RESEARCH_BY_KEY[r.key] = r
+    table.insert(GameConfig.RESEARCH_BY_CATEGORY[r.category], r)
+end
+
+-- ========== 图鉴/收集系统 ==========
+-- 集齐某鱼种全5品质后的永久奖励
+GameConfig.CODEX_FISH_REWARDS = {
+    { fishId = 1,  rewardType = "coinBonus",    value = 0.03, desc = "金币+3%" },
+    { fishId = 2,  rewardType = "coinBonus",    value = 0.04, desc = "金币+4%" },
+    { fishId = 3,  rewardType = "processSpeed", value = 0.05, desc = "合成速度+5%" },
+    { fishId = 4,  rewardType = "sushiPrice",   value = 0.04, desc = "寿司售价+4%" },
+    { fishId = 5,  rewardType = "comboBonus",   value = 0.05, desc = "组合加成+5%" },
+    { fishId = 6,  rewardType = "coinBonus",    value = 0.05, desc = "金币+5%" },
+    { fishId = 7,  rewardType = "processSpeed", value = 0.06, desc = "合成速度+6%" },
+    { fishId = 8,  rewardType = "sushiPrice",   value = 0.06, desc = "寿司售价+6%" },
+    { fishId = 9,  rewardType = "comboBonus",   value = 0.08, desc = "组合加成+8%" },
+    { fishId = 10, rewardType = "coinBonus",    value = 0.08, desc = "金币+8%" },
+}
+-- 快速查找
+GameConfig.CODEX_FISH_REWARD_BY_ID = {}
+for _, r in ipairs(GameConfig.CODEX_FISH_REWARDS) do
+    GameConfig.CODEX_FISH_REWARD_BY_ID[r.fishId] = r
+end
+
+-- 集齐某稀有度全部词条后的永久奖励
+GameConfig.CODEX_AFFIX_REWARDS = {
+    { rarityId = 1, rewardType = "catchValue",    value = 0.05, desc = "捕获价值+5%" },
+    { rarityId = 2, rewardType = "affixChance",   value = 0.02, desc = "词条概率+2%" },
+    { rarityId = 3, rewardType = "breedMutation", value = 0.02, desc = "突变概率+2%" },
+    { rarityId = 4, rewardType = "allBonus",      value = 0.05, desc = "全属性+5%" },
+}
+GameConfig.CODEX_AFFIX_REWARD_BY_RARITY = {}
+for _, r in ipairs(GameConfig.CODEX_AFFIX_REWARDS) do
+    GameConfig.CODEX_AFFIX_REWARD_BY_RARITY[r.rarityId] = r
+end
+
+-- ========== 养殖品质突变 ==========
+GameConfig.BREED_MUTATION = {
+    BASE_CHANCE = 0.05,     -- 基础突变概率5%
+    MAX_QUALITY = 5,        -- 最大品质(金色)不可突变
+    -- 各品质的突变概率因子: 品质越高突变越难
+    QUALITY_FACTOR = { 1.0, 0.8, 0.6, 0.4, 0 },
 }
 
 -- ========== 产业系统 ==========
 GameConfig.INDUSTRY = {
-    MAX_SLOTS = 3,       -- 最多同时加工3个寿司
-    INITIAL_SLOTS = 1,   -- 初始1个加工位
-    SLOT_UNLOCK_COST = { 0, 1000, 5000 },
     UPGRADE_PRICE_BONUS = 0.15,  -- 每级售价+15%
-}
 
--- ========== 捕鱼系统 ==========
-GameConfig.FISHING = {
-    CAST_TIME = 0.5,         -- 抛竿动画时间
-    MIN_WAIT_TIME = 1.5,     -- 最短等待时间
-    MAX_WAIT_TIME = 4.0,     -- 最长等待时间
-    REEL_TIME = 0.8,         -- 收杆时间
-    CATCH_DISPLAY_TIME = 1.5, -- 展示钓到的鱼时间
-    AUTO_FISH_INTERVAL = 3.0, -- 自动捕鱼间隔(秒)
+    -- 合成队列（待处理区）
+    SYNTHESIS_BASE_TIME = 5,     -- 基础合成时间(秒)
+    QUEUE_MAX_SLOTS = 8,         -- 待处理区最大槽位
+    QUEUE_INITIAL_SLOTS = 3,     -- 初始解锁槽位数
+    QUEUE_SLOT_UNLOCK_COST = {   -- 每个槽解锁费用（前3个免费）
+        0, 0, 0,
+        500, 1000, 2000, 4000, 8000,
+    },
 }
 
 return GameConfig

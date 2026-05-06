@@ -6,6 +6,8 @@
 -- ============================================================================
 
 local FishSwarmSystem = require("systems.FishSwarmSystem")
+local BossSystem      = require("systems.BossSystem")
+local RareFishSystem  = require("systems.RareFishSystem")
 
 local SwipeSystem = {}
 
@@ -91,7 +93,7 @@ local function checkFishCollision(x2, y2, x1, y1)
     local allFish = FishSwarmSystem.getAllFish()
 
     for _, fish in ipairs(allFish) do
-        if not caughtThisSwipe_[fish] then
+        if fish.isCatchable and not caughtThisSwipe_[fish] then
             -- 鱼的归一化坐标 → 逻辑屏幕坐标
             local fx = fish.x * screenW_
             local fy = fish.y * screenH_
@@ -103,6 +105,29 @@ local function checkFishCollision(x2, y2, x1, y1)
                     catchCallback_(fish)
                 end
             end
+        end
+    end
+
+    -- 鱼王命中检测
+    BossSystem.checkHit(x1, y1, x2, y2, screenW_, screenH_)
+
+    -- 稀有鱼命中检测
+    if RareFishSystem.checkHit(x1, y1, x2, y2, screenW_, screenH_) then
+        local result = RareFishSystem.processCapture()
+        if result and catchCallback_ then
+            -- 通知 main.lua 处理稀有鱼捕获结果
+            -- 使用特殊标记让 main.lua 区分
+            catchCallback_({
+                isRareFish   = true,
+                rareResult   = result,
+                x            = result.screenX / screenW_,
+                y            = result.screenY / screenH_,
+                size         = 70,
+                sizeTier     = "large",
+                variant      = 1,
+                dir          = 1,
+                phase        = 0,
+            })
         end
     end
 end

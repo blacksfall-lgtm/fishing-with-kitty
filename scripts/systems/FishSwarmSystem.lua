@@ -6,6 +6,10 @@
 --       长条形队列, 直线穿越屏幕, 12~18秒通过
 -- ============================================================================
 
+local GameConfig     = require("config.GameConfig")
+local GameState      = require("state.GameState")
+local ResearchSystem = require("systems.ResearchSystem")
+
 local FishSwarmSystem = {}
 
 -- ============================================================================
@@ -20,8 +24,8 @@ local FISH_SIZES = {
 
 local CONFIG = {
     ambient = {
-        minCount = 18,
-        maxCount = 36,
+        minCount = 6,
+        maxCount = 12,
         vxBase   = 0.25,     -- 横穿屏幕约4秒
         vyBase   = 0.20,     -- 纵穿屏幕约5秒
         yMin     = 0.30,     -- 鱼活动区域上界
@@ -29,31 +33,41 @@ local CONFIG = {
     },
     wave = {
         interval       = 60,     -- 波次间隔 (秒)
-        visualMin      = 180,    -- 装饰鱼最少
-        visualMax      = 240,    -- 装饰鱼最多
-        catchableMin   = 36,     -- 可捕获鱼最少
-        catchableMax   = 60,     -- 可捕获鱼最多
-        crossTimeMin   = 12,     -- 穿越屏幕最短时间
-        crossTimeMax   = 18,     -- 穿越屏幕最长时间
-        formWidthMin   = 0.15,   -- 鱼群宽度 (屏幕比例)
-        formWidthMax   = 0.25,
-        formLengthMin  = 1.80,   -- 鱼群长度 (屏幕比例)
-        formLengthMax  = 3.60,
+        visualMin      = 80,     -- 装饰鱼最少
+        visualMax      = 100,    -- 装饰鱼最多
+        catchableMin   = 12,     -- 可捕获鱼最少
+        catchableMax   = 20,     -- 可捕获鱼最多
+        crossTimeMin   = 15,     -- 穿越屏幕最短时间
+        crossTimeMax   = 15,     -- 穿越屏幕最长时间
+        formWidthMin   = 0.55,   -- 鱼群宽度 (屏幕比例)
+        formWidthMax   = 0.55,
+        formLengthMin  = 1.00,   -- 鱼群长度 (屏幕比例)
+        formLengthMax  = 1.00,
     },
 }
 
---- 随机选取一个尺寸档位 (常驻鱼: 三档均有)
+--- 随机选取一个尺寸档位 (根据当前鱼饵的 sizeWeights)
+---@return number size 鱼影像素尺寸
+---@return string sizeTier "small"|"medium"|"large"
 local function pickAmbientSize()
+    -- 读取当前鱼饵的尺寸权重
+    local baitId = GameState.currentBait or "normal"
+    local baitCfg = GameConfig.BAIT_BY_ID[baitId]
+    local weights = baitCfg and baitCfg.sizeWeights
+        or { small = 1.0, medium = 0, large = 0 }
+
     local roll = math.random()
-    local tier
-    if roll < 0.60 then      -- 60% 小鱼
-        tier = FISH_SIZES.small
-    elseif roll < 0.90 then  -- 30% 中鱼
-        tier = FISH_SIZES.medium
-    else                     -- 10% 大鱼
-        tier = FISH_SIZES.large
+    local tier, tierName
+    local wSmall  = weights.small  or 0
+    local wMedium = weights.medium or 0
+    if roll < wSmall then
+        tier = FISH_SIZES.small;  tierName = "small"
+    elseif roll < wSmall + wMedium then
+        tier = FISH_SIZES.medium; tierName = "medium"
+    else
+        tier = FISH_SIZES.large;  tierName = "large"
     end
-    return tier.min + math.random() * (tier.max - tier.min)
+    return tier.min + math.random() * (tier.max - tier.min), tierName
 end
 
 -- ============================================================================
@@ -153,18 +167,21 @@ local function createAmbientFish(initialSpawn)
         fishDir = (math.random() > 0.5) and 1 or -1
     end
 
+    local fishSize, sizeTier = pickAmbientSize()
+
     return {
         x       = startX,
         y       = startY,
         vx      = vx,
         vy      = vy,
-        size    = pickAmbientSize(),
-        variant = 1,
+        size    = fishSize,
+        sizeTier = sizeTier,
+        variant = randInt(1, 4),
         dir     = fishDir,
         phase   = math.random() * 6.28,
         isWave     = false,
-        isCatchable = false,
-        alpha   = 0.35,
+        isCatchable = true,    -- 常驻鱼全部可捕获
+        alpha   = 0.6,
     }
 end
 
@@ -250,14 +267,14 @@ local function spawnWave()
             fishDir = (math.random() > 0.5) and 1 or -1
         end
 
-        -- 波次鱼统一用最小档尺寸; 可捕获鱼稍不透明
-        local sm = FISH_SIZES.small
-        local fishSize = randRange(sm.min, sm.max)
+        -- 波次鱼混合三档尺寸
+        local fishSize, sizeTier = pickAmbientSize()
+        local fishCatchable = (i <= numCatchable)
         local fishAlpha
-        if i <= numCatchable then
-            fishAlpha = 0.45
+        if fishCatchable then
+            fishAlpha = 0.7
         else
-            fishAlpha = 0.30
+            fishAlpha = 0.55
         end
 
         waveFish_[#waveFish_ + 1] = {
@@ -266,11 +283,12 @@ local function spawnWave()
             vx      = vx * speed * speedMult,
             vy      = vy * speed * speedMult,
             size    = fishSize,
-            variant = 1,
+            sizeTier = sizeTier,
+            variant = randInt(1, 4),
             dir     = fishDir,
             phase   = math.random() * 6.28,
             isWave     = true,
-            isCatchable = (i <= numCatchable),
+            isCatchable = fishCatchable,
             alpha   = fishAlpha,
             -- 个体抖动 (渲染时叠加)
             jitterPhase = math.random() * 6.28,
@@ -290,7 +308,8 @@ end
 
 --- 初始化鱼群系统
 function FishSwarmSystem.init()
-    ambientTarget_ = randInt(CONFIG.ambient.minCount, CONFIG.ambient.maxCount)
+    local baseTarget = randInt(CONFIG.ambient.minCount, CONFIG.ambient.maxCount)
+    ambientTarget_ = math.floor(baseTarget * ResearchSystem.getDensityBonus())
     ambientFish_ = {}
     for i = 1, ambientTarget_ do
         ambientFish_[i] = createAmbientFish(true)  -- 初始散布在屏幕内
@@ -334,11 +353,12 @@ function FishSwarmSystem.update(dt)
     end
 
     -- ================================================================
-    -- 波次计时
+    -- 波次计时 (研发: 波次频率缩短间隔)
     -- ================================================================
     if not waveActive_ then
         waveTimer_ = waveTimer_ + dt
-        if waveTimer_ >= CONFIG.wave.interval then
+        local effectiveInterval = CONFIG.wave.interval * ResearchSystem.getWaveIntervalMultiplier()
+        if waveTimer_ >= effectiveInterval then
             waveTimer_ = 0
             spawnWave()
         end
@@ -356,7 +376,7 @@ function FishSwarmSystem.update(dt)
             f.phase = f.phase + dt
 
             -- 超出屏幕范围则移除 (留较大余量等队尾离开)
-            if f.x < -0.5 or f.x > 1.5 or f.y < -0.5 or f.y > 1.5 then
+            if f.x < -6.0 or f.x > 7.0 or f.y < -6.0 or f.y > 7.0 then
                 table.remove(waveFish_, i)
             else
                 i = i + 1
@@ -404,7 +424,8 @@ end
 --- 距离下一波次的秒数
 function FishSwarmSystem.getNextWaveIn()
     if waveActive_ then return 0 end
-    return math.max(0, CONFIG.wave.interval - waveTimer_)
+    local effectiveInterval = CONFIG.wave.interval * ResearchSystem.getWaveIntervalMultiplier()
+    return math.max(0, effectiveInterval - waveTimer_)
 end
 
 --- 当前总鱼数
@@ -412,11 +433,32 @@ function FishSwarmSystem.getFishCount()
     return #ambientFish_ + #waveFish_
 end
 
+--- 从鱼群中移除指定鱼 (捕获时调用)
+---@param fish table 要移除的鱼对象引用
+---@return boolean 是否成功移除
+function FishSwarmSystem.removeFish(fish)
+    for i, f in ipairs(ambientFish_) do
+        if f == fish then
+            table.remove(ambientFish_, i)
+            return true
+        end
+    end
+    for i, f in ipairs(waveFish_) do
+        if f == fish then
+            table.remove(waveFish_, i)
+            return true
+        end
+    end
+    return false
+end
+
 --- 手动触发波次 (快捷键用)
 function FishSwarmSystem.forceWave()
     if waveActive_ then
-        print("[FishSwarm] 波次进行中, 忽略手动触发")
-        return false
+        -- 强制结束当前波次，立即刷新
+        waveFish_ = {}
+        waveActive_ = false
+        print("[FishSwarm] 强制结束当前波次，重新生成")
     end
     waveTimer_ = 0
     spawnWave()
