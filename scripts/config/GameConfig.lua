@@ -46,56 +46,47 @@ GameConfig.ZONE_DISPLAY = {
     legendary = "传说之海",
 }
 
--- 海域解锁费用 (nearshore 免费, 其余需金币)
-GameConfig.ZONE_UNLOCK_COST = {
-    nearshore = 0,
-    offshore  = 500,
-    deepocean = 2000,
-    abyss     = 8000,
-    legendary = 30000,
-}
-
 -- ========== 10种鱼配置 (MVP: 6近海+4外海) ==========
 GameConfig.FISH = {
     -- 近海 6种
     {
         id = 1, name = "sardine", displayName = "小沙丁鱼", icon = "🐟",
-        zone = "nearshore", fishType = "producer",
+        zone = "nearshore", fishType = "producer", rarity = "common",
         baseValue = 10, catchWeight = 30,
         qualityWeights = { 60, 25, 10, 4, 1 },
         desc = "最常见的近海鱼，新手的好伙伴",
     },
     {
         id = 2, name = "clownfish", displayName = "小丑鱼", icon = "🐠",
-        zone = "nearshore", fishType = "producer",
+        zone = "nearshore", fishType = "producer", rarity = "common",
         baseValue = 18, catchWeight = 25,
         qualityWeights = { 55, 28, 12, 4, 1 },
         desc = "色彩鲜艳的热带鱼",
     },
     {
         id = 3, name = "bubblefish", displayName = "泡泡鱼", icon = "🫧",
-        zone = "nearshore", fishType = "accelerator",
+        zone = "nearshore", fishType = "accelerator", rarity = "common",
         baseValue = 15, catchWeight = 22,
         qualityWeights = { 58, 26, 11, 4, 1 },
         desc = "会吐泡泡的可爱小鱼",
     },
     {
         id = 4, name = "coralfish", displayName = "珊瑚鱼", icon = "🪸",
-        zone = "nearshore", fishType = "amplifier",
+        zone = "nearshore", fishType = "amplifier", rarity = "uncommon",
         baseValue = 22, catchWeight = 18,
         qualityWeights = { 55, 27, 12, 5, 1 },
         desc = "珊瑚丛中的增幅鱼",
     },
     {
         id = 5, name = "shellfish", displayName = "贝壳鱼", icon = "🐚",
-        zone = "nearshore", fishType = "combo",
+        zone = "nearshore", fishType = "combo", rarity = "uncommon",
         baseValue = 25, catchWeight = 15,
         qualityWeights = { 52, 28, 13, 5, 2 },
         desc = "带着贝壳的奇特组合鱼",
     },
     {
         id = 6, name = "bluefin", displayName = "蓝鳍鱼", icon = "🐟",
-        zone = "nearshore", fishType = "producer",
+        zone = "nearshore", fishType = "producer", rarity = "rare",
         baseValue = 35, catchWeight = 10,
         qualityWeights = { 50, 28, 14, 6, 2 },
         desc = "近海最有价值的鱼",
@@ -103,28 +94,28 @@ GameConfig.FISH = {
     -- 外海 4种
     {
         id = 7, name = "flyingfish", displayName = "飞鱼", icon = "🦅",
-        zone = "offshore", fishType = "accelerator",
+        zone = "offshore", fishType = "accelerator", rarity = "uncommon",
         baseValue = 60, catchWeight = 28,
         qualityWeights = { 50, 28, 14, 6, 2 },
         desc = "能飞出水面的加速型鱼",
     },
     {
         id = 8, name = "silverfish", displayName = "银枪鱼", icon = "🗡️",
-        zone = "offshore", fishType = "producer",
+        zone = "offshore", fishType = "producer", rarity = "rare",
         baseValue = 90, catchWeight = 25,
         qualityWeights = { 48, 28, 15, 7, 2 },
         desc = "外海主力产出鱼",
     },
     {
         id = 9, name = "gemfish", displayName = "宝石鱼", icon = "💎",
-        zone = "offshore", fishType = "amplifier",
+        zone = "offshore", fishType = "amplifier", rarity = "epic",
         baseValue = 130, catchWeight = 18,
         qualityWeights = { 45, 28, 16, 8, 3 },
         desc = "闪闪发光的增幅鱼",
     },
     {
         id = 10, name = "octopus", displayName = "章鱼", icon = "🐙",
-        zone = "offshore", fishType = "combo",
+        zone = "offshore", fishType = "combo", rarity = "epic",
         baseValue = 180, catchWeight = 12,
         qualityWeights = { 42, 28, 17, 9, 4 },
         desc = "高级组合型鱼",
@@ -335,6 +326,47 @@ GameConfig.BOAT = {
     },
 }
 
+-- ========== 鱼王伤害 (按船科技等级) ==========
+-- 索引 = boatLevel (1~10), [0] 为保底默认值
+GameConfig.FISH_KING_DAMAGE = {
+    [0]  = 10,
+    [1]  = 10,
+    [2]  = 15,
+    [3]  = 17,
+    [4]  = 19,
+    [5]  = 22,
+    [6]  = 25,
+    [7]  = 30,
+    [8]  = 34,
+    [9]  = 39,
+    [10] = 45,
+}
+
+--- 获取当前船等级对鱼王的伤害
+function GameConfig.getFishKingDamage(boatLevel)
+    return GameConfig.FISH_KING_DAMAGE[boatLevel] or GameConfig.FISH_KING_DAMAGE[0]
+end
+
+-- ========== 鱼王连击倍率 ==========
+GameConfig.FISH_KING_COMBO = {
+    { minCombo = 0,  multiplier = 1.00 },
+    { minCombo = 5,  multiplier = 1.15 },
+    { minCombo = 10, multiplier = 1.35 },
+    { minCombo = 15, multiplier = 1.60 },
+    { minCombo = 20, multiplier = 1.90 },
+}
+
+--- 根据连击数获取鱼王伤害倍率
+function GameConfig.getFishKingComboMult(comboCount)
+    local mult = 1.0
+    for _, entry in ipairs(GameConfig.FISH_KING_COMBO) do
+        if comboCount >= entry.minCombo then
+            mult = entry.multiplier
+        end
+    end
+    return mult
+end
+
 -- ========== 装备升级 ==========
 -- 4种装备: 鱼竿/渔网/鱼饵/鱼灯, 等级上限由渔船等级决定
 GameConfig.EQUIP = {
@@ -384,16 +416,6 @@ GameConfig.EQUIP = {
         },
     },
 }
-
---- 获取装备升级费用
-function GameConfig.getEquipUpgradeCost(equipId, currentLevel)
-    for _, eq in ipairs(GameConfig.EQUIP.LIST) do
-        if eq.id == equipId then
-            return math.floor(eq.baseCost * (currentLevel + 1) ^ eq.costScale)
-        end
-    end
-    return 999999
-end
 
 --- 获取装备等级上限 (由渔船等级决定)
 function GameConfig.getEquipLevelCap(boatLevel)

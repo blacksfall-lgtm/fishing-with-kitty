@@ -13,6 +13,7 @@
 local GameConfig     = require("config.GameConfig")
 local GameState      = require("state.GameState")
 local ResearchSystem = require("systems.ResearchSystem")
+local EconomySystem  = require("systems.EconomySystem")
 
 local IndustrySystem = {}
 
@@ -251,15 +252,7 @@ end
 -- ============================================================================
 
 function IndustrySystem:getSellPrice(recipeId, overrideLevel)
-    local recipe = GameConfig.SUSHI_BY_ID[recipeId]
-    if not recipe then return 0 end
-    local level = overrideLevel or GameState:getRecipeLevel(recipeId)
-    local price = recipe.basePrice * GameConfig.getRecipePriceMultiplier(level)
-    price = price * (1 + GameState.cachedBuffs.sushiPrice)
-    price = price * (1 + GameState.cachedBuffs.coinMultiplier)
-    -- 研发: 寿司溢价加成
-    price = price * (1 + ResearchSystem.getSushiPriceBonus())
-    return math.floor(price)
+    return EconomySystem.calcSushiPrice(recipeId, overrideLevel)
 end
 
 -- ============================================================================

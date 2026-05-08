@@ -5,6 +5,7 @@ local GameConfig     = require("config.GameConfig")
 local GameState      = require("state.GameState")
 local AffixSystem    = require("systems.AffixSystem")
 local ResearchSystem = require("systems.ResearchSystem")
+local EconomySystem  = require("systems.EconomySystem")
 
 local AquariumSystem = {}
 
@@ -31,28 +32,8 @@ function AquariumSystem:update(dt)
     if GameState.aquariumIncomeTimer >= interval then
         GameState.aquariumIncomeTimer = GameState.aquariumIncomeTimer - interval
 
-        -- 计算总收入
-        local totalGold = 0
-        for i = 1, GameState.unlockedAquariumSlots do
-            local slot = GameState.aquariumSlots[i]
-            if slot then
-                local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
-                local qualityCfg = GameConfig.QUALITY[slot.qualityId]
-                local qualityMulti = qualityCfg and qualityCfg.multiplier or 1.0
-                local baseValue = fishCfg and fishCfg.baseValue or 10
-                local income = GameConfig.AQUARIUM.INCOME.BASE_PER_FISH
-                    + baseValue * GameConfig.AQUARIUM.INCOME.VALUE_RATIO
-                -- 词条加成
-                local affixMulti = 1.0
-                if slot.affixes and #slot.affixes > 0 then
-                    affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
-                end
-                totalGold = totalGold + math.floor(income * qualityMulti * affixMulti)
-            end
-        end
-
-        -- 研发: 鱼缸收益加成
-        totalGold = math.floor(totalGold * (1 + ResearchSystem.getAquariumIncomeBonus()))
+        -- 统一计算总收入 (加法桶模型, 含研发+图鉴加成)
+        local totalGold = EconomySystem.calcAquariumTotalIncome()
 
         if totalGold > 0 then
             GameState:addCoins(totalGold)
@@ -64,27 +45,9 @@ function AquariumSystem:update(dt)
     end
 end
 
---- 获取当前每周期预估收入
+--- 获取当前每周期预估收入 (含加法桶加成)
 function AquariumSystem:getEstimatedIncome()
-    local totalGold = 0
-    for i = 1, GameState.unlockedAquariumSlots do
-        local slot = GameState.aquariumSlots[i]
-        if slot then
-            local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
-            local qualityCfg = GameConfig.QUALITY[slot.qualityId]
-            local qualityMulti = qualityCfg and qualityCfg.multiplier or 1.0
-            local baseValue = fishCfg and fishCfg.baseValue or 10
-            local income = GameConfig.AQUARIUM.INCOME.BASE_PER_FISH
-                + baseValue * GameConfig.AQUARIUM.INCOME.VALUE_RATIO
-            -- 词条加成
-            local affixMulti = 1.0
-            if slot.affixes and #slot.affixes > 0 then
-                affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
-            end
-            totalGold = totalGold + math.floor(income * qualityMulti * affixMulti)
-        end
-    end
-    return totalGold
+    return EconomySystem.calcAquariumTotalIncome()
 end
 
 --- 放入鱼到鱼缸（普通鱼，无词条）
@@ -170,7 +133,7 @@ function AquariumSystem:removeFish(slotIndex)
     return true
 end
 
---- 重新计算所有Buff
+--- 重新计算所有Buff (委托 EconomySystem 统一公式)
 function AquariumSystem:recalculateBuffs()
     -- 清零
     GameState.cachedBuffs.sushiPrice = 0
@@ -182,16 +145,12 @@ function AquariumSystem:recalculateBuffs()
         local slot = GameState.aquariumSlots[i]
         if slot then
             local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
-            local buffDef = GameConfig.AQUARIUM.BUFF_PER_TYPE[fishCfg.fishType]
-            if buffDef then
-                local qualityMulti = GameConfig.AQUARIUM.QUALITY_BUFF_MULTI[slot.qualityId] or 1
-                -- 词条鱼的buff也乘以词条加成
-                local affixMulti = 1.0
-                if slot.affixes and #slot.affixes > 0 then
-                    affixMulti = AffixSystem.calcValueMultiplier(slot.affixes)
+            if fishCfg then
+                local buffType, buffValue = EconomySystem.calcAquariumBuff(
+                    fishCfg.fishType, slot.qualityId, slot.affixes)
+                if GameState.cachedBuffs[buffType] then
+                    GameState.cachedBuffs[buffType] = GameState.cachedBuffs[buffType] + buffValue
                 end
-                local buffValue = buffDef.base * qualityMulti * affixMulti
-                GameState.cachedBuffs[buffDef.type] = GameState.cachedBuffs[buffDef.type] + buffValue
             end
         end
     end

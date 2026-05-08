@@ -23,6 +23,7 @@ local RareFishSystem  = require("systems.RareFishSystem")
 local UIAtlas         = require("ui.UIAtlas")
 local GameConfig      = require("config.GameConfig")
 local GameState       = require("state.GameState")
+local EconomySystem   = require("systems.EconomySystem")
 local FormatUtils     = require("utils.FormatUtils")
 
 local WaterScene = {}
@@ -2410,7 +2411,7 @@ function WaterScene.renderBoatUpgradePopup(nvg, x, y, w, h)
     for idx, eq in ipairs(GameConfig.EQUIP.LIST) do
         local eqLv = GameState.equipLevels[eq.id] or 1
         local isEqMax = (eqLv >= equipCapLv)
-        local upgCost = GameConfig.getEquipUpgradeCost(eq.id, eqLv)
+        local upgCost = EconomySystem.calcEquipUpgradeCost(eq.id, eqLv)
 
         local rowY = rowStartY + (idx - 1) * (rowH + rowGap)
         local rowX = popX + pad
@@ -2577,7 +2578,7 @@ function WaterScene.handleBoatUpgradePopupInput()
             local eqLv = GameState.equipLevels[eq.id] or 1
             local capLv = GameConfig.getEquipLevelCap(GameState.boatLevel or 1)
             if eqLv < capLv then
-                local cost = GameConfig.getEquipUpgradeCost(eq.id, eqLv)
+                local cost = EconomySystem.calcEquipUpgradeCost(eq.id, eqLv)
                 if GameState:spendCoins(cost) then
                     GameState.equipLevels[eq.id] = eqLv + 1
                     print(string.format("[EquipUpgrade] %s 升级到 Lv.%d",

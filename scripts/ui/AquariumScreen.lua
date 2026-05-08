@@ -5,6 +5,7 @@ local UI = require("urhox-libs/UI")
 local GameConfig      = require("config.GameConfig")
 local GameState       = require("state.GameState")
 local AquariumSystem  = require("systems.AquariumSystem")
+local EconomySystem   = require("systems.EconomySystem")
 local FormatUtils     = require("utils.FormatUtils")
 
 local AquariumScreen = {}
@@ -197,9 +198,8 @@ function AquariumScreen.refreshSlots()
         elseif slot then
             local fishCfg = GameConfig.FISH_BY_ID[slot.fishId]
             local qualityCfg = GameConfig.QUALITY[slot.qualityId]
-            local buffDef = GameConfig.AQUARIUM.BUFF_PER_TYPE[fishCfg.fishType]
-            local qualityMulti = GameConfig.AQUARIUM.QUALITY_BUFF_MULTI[slot.qualityId] or 1
-            local buffValue = buffDef and (buffDef.base * qualityMulti) or 0
+            local _, buffValue = EconomySystem.calcAquariumBuff(
+                fishCfg.fishType, slot.qualityId, slot.affixes)
 
             slotsPanel_:AddChild(UI.Panel {
                 width = "100%",
@@ -305,9 +305,8 @@ function AquariumScreen.showFishSelector()
             local fishCfg = GameConfig.FISH_BY_ID[fishId]
             local qualityCfg = GameConfig.QUALITY[qualityId]
             if fishCfg and qualityCfg then
-                local buffDef = GameConfig.AQUARIUM.BUFF_PER_TYPE[fishCfg.fishType]
-                local qualityMulti = GameConfig.AQUARIUM.QUALITY_BUFF_MULTI[qualityId] or 1
-                local buffValue = buffDef and (buffDef.base * qualityMulti) or 0
+                local _, buffValue = EconomySystem.calcAquariumBuff(
+                    fishCfg.fishType, qualityId, nil)
                 local fid, qid = fishId, qualityId
 
                 fishSelectPanel_:AddChild(UI.Panel {

@@ -1,10 +1,20 @@
 -- ============================================================================
 -- ResearchSystem: 研发系统 - 永久科技树升级
 -- ============================================================================
-local GameConfig = require("config.GameConfig")
-local GameState  = require("state.GameState")
+local GameConfig    = require("config.GameConfig")
+local GameState     = require("state.GameState")
 
 local ResearchSystem = {}
+
+-- lazy require 避免循环依赖 (EconomySystem → ResearchSystem → EconomySystem)
+---@type table
+local EconomySystem_
+local function getEconomy()
+    if not EconomySystem_ then
+        EconomySystem_ = require("systems.EconomySystem")
+    end
+    return EconomySystem_
+end
 
 -- ============================================================================
 -- 核心 API
@@ -37,14 +47,11 @@ function ResearchSystem.getEffect(key)
     return value
 end
 
---- 获取升级费用
+--- 获取升级费用 (委托 EconomySystem)
 ---@param key string
 ---@return number
 function ResearchSystem.getUpgradeCost(key)
-    local cfg = GameConfig.RESEARCH_BY_KEY[key]
-    if not cfg then return 999999 end
-    local level = ResearchSystem.getLevel(key)
-    return math.floor(cfg.baseCost * (level + 1) ^ cfg.costScale)
+    return getEconomy().calcResearchUpgradeCost(key)
 end
 
 --- 是否可以升级

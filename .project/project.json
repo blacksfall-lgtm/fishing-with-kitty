@@ -5,7 +5,7 @@
     "id": "583798678"
   },
   "entry": "main.lua",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "taptap_publish": {
     "title": "钓鱼大亨",
     "description": "在广阔的海域中滑动捕鱼，收集各种稀有鱼类，经营你的渔业帝国！探索近海与外海，挑战传说级Boss鱼，解锁船员与装备，成为真正的钓鱼大亨！",
@@ -24,10 +24,10 @@
     "promotional_image": ""
   },
   "test_qrcode": {
-    "url": "https://tapcode-sce.spark.xd.com/qrcode/p_r7sd_1777283249801.png",
-    "generated_at": "2026-04-27T09:47:29.910Z"
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/p_r7sd_1778070676364.png",
+    "generated_at": "2026-05-06T12:31:16.497Z"
   },
   "metadata": {
-    "updated_at": "2026-04-27T09:47:29.910Z"
+    "updated_at": "2026-05-06T12:31:16.497Z"
   }
 }

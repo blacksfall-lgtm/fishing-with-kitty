@@ -2,8 +2,8 @@
 -- FishSwarmSystem: 鱼群刷新系统（直线波次版）
 -- ============================================================================
 -- 平时: 6~12 条常驻鱼影, 直线穿越屏幕
--- 波次: 每60秒刷一波, 60~80条视觉鱼 + 12~20条可捕获鱼
---       长条形队列, 直线穿越屏幕, 12~18秒通过
+-- 波次: 每60秒刷一波, 80~100条鱼 (全部可捕获)
+--       长条形队列, 直线穿越屏幕
 -- ============================================================================
 
 local GameConfig     = require("config.GameConfig")
@@ -33,10 +33,8 @@ local CONFIG = {
     },
     wave = {
         interval       = 60,     -- 波次间隔 (秒)
-        visualMin      = 80,     -- 装饰鱼最少
-        visualMax      = 100,    -- 装饰鱼最多
-        catchableMin   = 12,     -- 可捕获鱼最少
-        catchableMax   = 20,     -- 可捕获鱼最多
+        visualMin      = 80,     -- 波次鱼最少
+        visualMax      = 100,    -- 波次鱼最多 (全部可捕获)
         crossTimeMin   = 15,     -- 穿越屏幕最短时间
         crossTimeMax   = 15,     -- 穿越屏幕最长时间
         formWidthMin   = 0.55,   -- 鱼群宽度 (屏幕比例)
@@ -237,10 +235,8 @@ local function spawnWave()
         centerY = (vy > 0) and -margin or (1.0 + margin)
     end
 
-    -- 鱼数量
-    local numCatchable = randInt(wcfg.catchableMin, wcfg.catchableMax)
-    local numVisual    = randInt(wcfg.visualMin, wcfg.visualMax)
-    local total = numCatchable + numVisual
+    -- 鱼数量 (全部可捕获)
+    local total = randInt(wcfg.visualMin, wcfg.visualMax)
 
     waveFish_ = {}
 
@@ -267,15 +263,8 @@ local function spawnWave()
             fishDir = (math.random() > 0.5) and 1 or -1
         end
 
-        -- 波次鱼混合三档尺寸
+        -- 波次鱼混合三档尺寸 (全部可捕获)
         local fishSize, sizeTier = pickAmbientSize()
-        local fishCatchable = (i <= numCatchable)
-        local fishAlpha
-        if fishCatchable then
-            fishAlpha = 0.7
-        else
-            fishAlpha = 0.55
-        end
 
         waveFish_[#waveFish_ + 1] = {
             x       = spawnX,
@@ -288,8 +277,8 @@ local function spawnWave()
             dir     = fishDir,
             phase   = math.random() * 6.28,
             isWave     = true,
-            isCatchable = fishCatchable,
-            alpha   = fishAlpha,
+            isCatchable = true,
+            alpha   = 0.7,
             -- 个体抖动 (渲染时叠加)
             jitterPhase = math.random() * 6.28,
             jitterAmp   = randRange(0.001, 0.004),
@@ -298,8 +287,8 @@ local function spawnWave()
 
     waveActive_ = true
     print(string.format(
-        "[FishSwarm] 波次生成: %d条鱼 (%d可捕获), 方向=(%.2f,%.2f), 穿越时间=%.1fs",
-        total, numCatchable, vx, vy, crossTime))
+        "[FishSwarm] 波次生成: %d条鱼 (全部可捕获), 方向=(%.2f,%.2f), 穿越时间=%.1fs",
+        total, vx, vy, crossTime))
 end
 
 -- ============================================================================

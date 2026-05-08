@@ -9,6 +9,7 @@
 local GameConfig      = require("config.GameConfig")
 local GameState       = require("state.GameState")
 local IndustrySystem  = require("systems.IndustrySystem")
+local EconomySystem   = require("systems.EconomySystem")
 local FormatUtils     = require("utils.FormatUtils")
 
 local IndustryScene = {}
@@ -491,7 +492,7 @@ function IndustryScene.checkInput()
                     return nil
                 elseif rect.action == "try_unlock_zone" then
                     local zone = ZONE_LIST[rect.data]
-                    local cost = GameConfig.ZONE_UNLOCK_COST[zone.key] or 0
+                    local cost = EconomySystem.getZoneUnlockCost(zone.key)
                     unlockPopup_.open = true
                     unlockPopup_.zoneIdx = rect.data
                     unlockPopup_.zoneKey = zone.key
@@ -1750,7 +1751,7 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
         local zy = curY + (i - 1) * (zoneItemH + zoneGap)
         local selected = (i == selectedZoneIdx_)
         local unlocked = GameState.unlockedZones[zone.key]
-        local cost = GameConfig.ZONE_UNLOCK_COST[zone.key] or 0
+        local cost = EconomySystem.getZoneUnlockCost(zone.key)
 
         -- 背景
         nvgBeginPath(nvg)

@@ -9,9 +9,6 @@
 
 local GameConfig     = require("config.GameConfig")
 local GameState      = require("state.GameState")
-local AffixSystem    = require("systems.AffixSystem")
-local CodexSystem    = require("systems.CodexSystem")
-local ResearchSystem = require("systems.ResearchSystem")
 
 local RareFishSystem = {}
 
@@ -183,8 +180,9 @@ function RareFishSystem.checkHit(x1, y1, x2, y2, w, h)
     return false
 end
 
---- 处理稀有鱼捕获: 生成词条鱼奖励
----@return table|nil 捕获结果 {fishId, qualityId, affixes, displayName, uid, summary, valueMult, screenX, screenY}
+--- 处理稀有鱼捕获: 仅标记命中并返回屏幕坐标
+--- 掉落生成和奖励发放由 main.lua 回调通过 DropSystem + RewardSystem 处理
+---@return table|nil { screenX, screenY } 命中位置 (逻辑坐标)
 function RareFishSystem.processCapture()
     if not rareFish_ or not rareFish_.hit then return nil end
 
@@ -192,66 +190,14 @@ function RareFishSystem.processCapture()
     local screenX = rf.x * screenW_
     local screenY = rf.y * screenH_
 
-    -- 根据当前海域随机选鱼种
-    local zoneFish = GameConfig.FISH_BY_ZONE[GameState.currentZone]
-        or GameConfig.FISH_BY_ZONE["nearshore"]
-    local chosenFish = zoneFish[math.random(1, #zoneFish)]
-
-    -- 品质: 偏高品质 (稀有鱼给更好的品质)
-    local weights = chosenFish.qualityWeights or GameConfig.DEFAULT_QUALITY_WEIGHTS
-    local boosted = {}
-    for i, w in ipairs(weights) do
-        -- 高品质权重提升 50%
-        if i >= 3 then
-            boosted[i] = w * 1.5
-        else
-            boosted[i] = w
-        end
-    end
-    local totalW = 0
-    for _, w in ipairs(boosted) do totalW = totalW + w end
-    local roll = math.random() * totalW
-    local qualityId = 1
-    local acc = 0
-    for i, w in ipairs(boosted) do
-        acc = acc + w
-        if roll <= acc then qualityId = i; break end
-    end
-
-    -- 必定 1~2 词条
-    local affixes = AffixSystem.rollGuaranteedAffixes(1, 2)
-
-    -- 图鉴记录
-    CodexSystem.recordCatch(chosenFish.id, qualityId, affixes)
-
-    -- 入仓
-    local holdCap = GameConfig.FISH_HOLD_CAPACITY + ResearchSystem.getHoldCapacityBonus()
-    if GameState:getTotalFishInHold() < holdCap then
-        GameState:addFish(chosenFish.id, qualityId, 1)
-    end
-
-    -- 词条个体鱼
-    local uid = GameState:addIndividualFish(chosenFish.id, qualityId, affixes)
-    local summary = AffixSystem.getAffixSummary(affixes)
-    local valueMult = AffixSystem.calcValueMultiplier(affixes)
-
-    print(string.format("[RareFish] 捕获稀有鱼! uid=%d %s 品质%d 词条×%d [%s]",
-        uid, chosenFish.displayName, qualityId, #affixes, summary))
+    print("[RareFish] 稀有鱼被命中!")
 
     -- 清除稀有鱼
     rareFish_ = nil
 
     return {
-        fishId      = chosenFish.id,
-        qualityId   = qualityId,
-        affixes     = affixes,
-        displayName = chosenFish.displayName,
-        fishName    = chosenFish.name,
-        uid         = uid,
-        summary     = summary,
-        valueMult   = valueMult,
-        screenX     = screenX,
-        screenY     = screenY,
+        screenX = screenX,
+        screenY = screenY,
     }
 end
 

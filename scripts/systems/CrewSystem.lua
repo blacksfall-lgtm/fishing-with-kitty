@@ -1,8 +1,9 @@
 -- ============================================================================
 -- CrewSystem: 船员分配、升级、加成计算
 -- ============================================================================
-local GameConfig = require("config.GameConfig")
-local GameState  = require("state.GameState")
+local GameConfig    = require("config.GameConfig")
+local GameState     = require("state.GameState")
+local EconomySystem = require("systems.EconomySystem")
 
 local CrewSystem = {}
 
@@ -36,7 +37,7 @@ function CrewSystem:upgradeCrew(slotIndex)
     if not slot then return false, "该槽位无船员" end
 
     local crewCfg = GameConfig.CREW_BY_ID[slot.crewId]
-    local cost = math.floor(crewCfg.upgradeCostBase * (crewCfg.upgradeCostScale ^ (slot.level - 1)))
+    local cost = EconomySystem.calcCrewUpgradeCost(slot.crewId, slot.level)
 
     if not GameState:spendCoins(cost) then
         return false, "金币不足 (需要" .. cost .. ")"
@@ -72,12 +73,11 @@ function CrewSystem:getCrewBonus(crewType)
     return total
 end
 
---- 获取升级费用
+--- 获取升级费用 (委托 EconomySystem)
 function CrewSystem:getUpgradeCost(slotIndex)
     local slot = GameState.crewSlots[slotIndex]
     if not slot then return 0 end
-    local crewCfg = GameConfig.CREW_BY_ID[slot.crewId]
-    return math.floor(crewCfg.upgradeCostBase * (crewCfg.upgradeCostScale ^ (slot.level - 1)))
+    return EconomySystem.calcCrewUpgradeCost(slot.crewId, slot.level)
 end
 
 --- 获取船员显示信息

@@ -22,6 +22,8 @@ local ResearchSystem  = require("systems.ResearchSystem")
 local CodexSystem     = require("systems.CodexSystem")
 local ComboSystem     = require("systems.ComboSystem")
 local RareFishSystem  = require("systems.RareFishSystem")
+local DropSystem      = require("systems.DropSystem")
+local RewardSystem    = require("systems.RewardSystem")
 local DebugMode       = require("debug.DebugMode")
 
 ---@type NVGContextWrapper
@@ -63,88 +65,16 @@ function Start()
 
     -- 初始化滑动捕鱼系统
     SwipeSystem.init()
+
+    -- 设置 RewardSystem UI 回调
+    RewardSystem.setCallbacks({
+        showAffixPopup  = function(popup) WaterScene.showAffixPopup(popup) end,
+        showNewFishPopup = function(popup) WaterScene.showNewFishPopup(popup) end,
+        getFishImage    = function(name) return WaterScene.getFishImage(name) end,
+        getBucketCenter = function() return WaterScene.getBucketCenter() end,
+    })
+
     SwipeSystem.setCatchCallback(function(fish)
-        -- ========== 稀有鱼特殊处理 (已在 RareFishSystem.processCapture 中完成入仓) ==========
-        if fish.isRareFish and fish.rareResult then
-            local r = fish.rareResult
-            local physW = graphics:GetWidth()
-            local physH = graphics:GetHeight()
-            local dpr = graphics:GetDPR()
-            local w = physW / dpr
-            local h = physH / dpr
-
-            -- 金币奖励 (大额)
-            local coinValue = 100
-            ComboSystem.onCatch(r.screenX, r.screenY)
-            local comboMult = ComboSystem.getMultiplier()
-            if comboMult > 1.0 then
-                coinValue = math.floor(coinValue * comboMult)
-            end
-            GameState:addCoins(coinValue)
-            CatchAnimSystem.triggerCoinPopup(r.screenX, r.screenY, coinValue)
-
-            -- 显示词条弹窗
-            WaterScene.showAffixPopup({
-                fishName    = r.fishName,
-                displayName = r.displayName,
-                affixes     = r.affixes,
-                summary     = r.summary,
-                valueMult   = r.valueMult,
-                isRareFish  = true,
-            })
-
-            print(string.format("[Catch] 稀有鱼捕获! %s 品质%d +%d币 词条[%s]",
-                r.displayName, r.qualityId, coinValue, r.summary))
-            return
-        end
-
-        -- 根据当前海域筛选对应鱼种，按权重随机选择
-        local zoneFish = GameConfig.FISH_BY_ZONE[GameState.currentZone] or GameConfig.FISH_BY_ZONE["nearshore"]
-        local totalWeight = 0
-        for _, f in ipairs(zoneFish) do totalWeight = totalWeight + f.catchWeight end
-        local roll = math.random() * totalWeight
-        local chosenFish = zoneFish[1]
-        local acc = 0
-        for _, f in ipairs(zoneFish) do
-            acc = acc + f.catchWeight
-            if roll <= acc then chosenFish = f; break end
-        end
-
-        -- 随机品质 (研发: 品质提升增加高品质权重)
-        local qWeights = chosenFish.qualityWeights or GameConfig.DEFAULT_QUALITY_WEIGHTS
-        local qualityBoost = ResearchSystem.getQualityBoost()
-        local adjustedWeights = {}
-        for i, w in ipairs(qWeights) do
-            adjustedWeights[i] = w
-        end
-        -- 品质提升: 每级将1点权重从品质1转移到更高品质
-        if qualityBoost > 0 and #adjustedWeights >= 3 then
-            local shift = qualityBoost
-            local available = math.max(0, adjustedWeights[1] - 1)
-            shift = math.min(shift, available)
-            adjustedWeights[1] = adjustedWeights[1] - shift
-            -- 均匀分配给品质3/4/5
-            local highTiers = math.max(1, #adjustedWeights - 2)
-            for i = 3, #adjustedWeights do
-                adjustedWeights[i] = adjustedWeights[i] + shift / highTiers
-            end
-        end
-        local qTotal = 0
-        for _, w in ipairs(adjustedWeights) do qTotal = qTotal + w end
-        local qRoll = math.random() * qTotal
-        local qualityId = 1
-        local qAcc = 0
-        for i, w in ipairs(adjustedWeights) do
-            qAcc = qAcc + w
-            if qRoll <= qAcc then qualityId = i; break end
-        end
-
-        local sizeTier = fish.sizeTier or "small"
-
-        print(string.format("[Catch] %s(%s) 品质%d tier=%s pos=(%.2f,%.2f)",
-            chosenFish.displayName, chosenFish.name, qualityId, sizeTier,
-            fish.x or 0, fish.y or 0))
-
         -- 获取逻辑屏幕尺寸
         local physW = graphics:GetWidth()
         local physH = graphics:GetHeight()
@@ -152,141 +82,97 @@ function Start()
         local w = physW / dpr
         local h = physH / dpr
 
-        -- 鱼影屏幕坐标
+        -- ========== 稀有鱼特殊处理 ==========
+        if fish.isRareFish and fish.rareResult then
+            local r = fish.rareResult
+
+            -- 使用 DropSystem 生成掉落 (替代 RareFishSystem.processCapture 中的硬编码)
+            local catchResult = DropSystem.generateRareFishDrop({
+                zone = GameState.currentZone,
+            })
+
+            -- 统一奖励发放
+            RewardSystem.grantCatchReward(catchResult, {
+                screenX = r.screenX,
+                screenY = r.screenY,
+                w = w, h = h,
+                variant = 1, dir = 1, size = 70,
+            })
+
+            print(string.format("[Catch] 稀有鱼捕获! %s 品质%d +%d币 词条[%s]",
+                catchResult.displayName, catchResult.qualityId,
+                catchResult.coinValue, catchResult.summary))
+            return
+        end
+
+        -- ========== 普通捕获 ==========
+        local sizeTier = fish.sizeTier or "small"
         local fishScreenX = fish.x * w
         local fishScreenY = fish.y * h
-
-        -- 水桶目标坐标
-        local boatX, boatY = WaterScene.getBucketCenter()
 
         -- 1. 从鱼群中移除 (鱼影消失)
         FishSwarmSystem.removeFish(fish)
 
-        -- 2. 按鱼影大小给金币: 小鱼1 中鱼5 大鱼25
-        local sizeBaseValue = (sizeTier == "large" and 25) or (sizeTier == "medium" and 5) or 1
-        local coinValue = math.floor(sizeBaseValue
-            * (GameConfig.QUALITY[qualityId] and GameConfig.QUALITY[qualityId].multiplier or 1.0))
-
-        -- 连击系统: 记录捕获 + 应用连击倍率
-        ComboSystem.onCatch(fishScreenX, fishScreenY)
-        local comboMult = ComboSystem.getMultiplier()
-        if comboMult > 1.0 then
-            coinValue = math.floor(coinValue * comboMult)
+        -- 2. 连击系统 (仅波次鱼触发)
+        local comboMult = 1.0
+        if fish.isWave then
+            ComboSystem.onCatch(fishScreenX, fishScreenY)
+            comboMult = ComboSystem.getMultiplier()
         end
 
-        GameState:addCoins(coinValue)
-        CatchAnimSystem.triggerCoinPopup(fishScreenX, fishScreenY, coinValue)
+        -- 3. 使用 DropSystem 生成掉落
+        local catchResult = DropSystem.generateCatchResult({
+            zone         = GameState.currentZone,
+            sizeTier     = sizeTier,
+            qualityBoost = ResearchSystem.getQualityBoost(),
+            comboMult    = comboMult,
+        })
 
-        -- 3. 中大鱼额外飞向渔船 + 进鱼仓 (研发: 鱼仓扩容)
-        local holdCap = GameConfig.FISH_HOLD_CAPACITY + ResearchSystem.getHoldCapacityBonus()
-        if sizeTier ~= "small" and GameState:getTotalFishInHold() < holdCap then
-            local fishImgInfo = WaterScene.getFishImage(chosenFish.name)
-            CatchAnimSystem.trigger(
-                fishScreenX, fishScreenY,
-                boatX, boatY,
-                fish.variant or 1,
-                fish.dir or 1,
-                fish.size or 40,
-                w, h,
-                fishImgInfo
-            )
-            GameState:addFish(chosenFish.id, qualityId, 1)
+        -- 4. 统一奖励发放
+        RewardSystem.grantCatchReward(catchResult, {
+            screenX = fishScreenX,
+            screenY = fishScreenY,
+            w = w, h = h,
+            variant = fish.variant or 1,
+            dir     = fish.dir or 1,
+            size    = fish.size or 40,
+        })
 
-            -- 图鉴记录 (品质收集)
-            CodexSystem.recordCatch(chosenFish.id, qualityId, nil)
-
-            -- 新鱼发现检测
-            if not GameState.discoveredFish[chosenFish.id] then
-                GameState.discoveredFish[chosenFish.id] = true
-                WaterScene.showNewFishPopup({
-                    name = chosenFish.name,
-                    displayName = chosenFish.displayName,
-                    icon = chosenFish.icon or "🐟",
-                    qualityId = qualityId,
-                })
-            end
-
-            -- 词条系统: 10%概率生成词条鱼
-            local affixes = AffixSystem.rollAffixes(chosenFish.id, qualityId)
-            if affixes then
-                -- 图鉴记录词条
-                CodexSystem.recordCatch(chosenFish.id, qualityId, affixes)
-                local uid = GameState:addIndividualFish(chosenFish.id, qualityId, affixes)
-                local summary = AffixSystem.getAffixSummary(affixes)
-                local valueMult = AffixSystem.calcValueMultiplier(affixes)
-                print(string.format("[Affix] 词条鱼! uid=%d %s 品质%d 词条[%s] ×%.0f%%价值",
-                    uid, chosenFish.displayName, qualityId, summary,
-                    valueMult * 100))
-                -- 显示词条弹窗
-                WaterScene.showAffixPopup({
-                    fishName = chosenFish.name,
-                    displayName = chosenFish.displayName,
-                    affixes = affixes,
-                    summary = summary,
-                    valueMult = valueMult,
-                })
-            end
-
-            print(string.format("[Catch] %s鱼→鱼仓+金币 %s 品质%d +%d币 (总计 %d)",
-                sizeTier == "medium" and "中" or "大",
-                chosenFish.displayName, qualityId, coinValue, GameState.coins))
-        elseif sizeTier ~= "small" then
-            -- 鱼仓已满, 中大鱼只给金币
-            print(string.format("[Catch] 鱼仓已满! %s鱼仅获金币 +%d (总计 %d)",
-                sizeTier == "medium" and "中" or "大", coinValue, GameState.coins))
-        else
-            print(string.format("[Catch] 小鱼→金币 +%d (总计 %d)", coinValue, GameState.coins))
-        end
+        print(string.format("[Catch] %s(%s) 品质%d %s +%d币 (总计 %d)",
+            catchResult.displayName, catchResult.fishName,
+            catchResult.qualityId, sizeTier,
+            catchResult.coinValue, GameState.coins))
     end)
 
     -- 初始化鱼王系统
     BossSystem.init()
     BossSystem.setCallbacks(
         function(boss)
-            -- 鱼王被击败: 奖励金币
-            local reward = 500
-            GameState:addCoins(reward)
-            print(string.format("[BossEvent] 鱼王被击败! 奖励 %d 金币 (总计 %d)", reward, GameState.coins))
+            -- 使用 DropSystem 生成 Boss 掉落
+            local catchResult = DropSystem.generateBossDrop({
+                zone = GameState.currentZone,
+                bossVariant = boss.variant or 1,
+            })
 
-            -- 鱼王必掉词条鱼 (2-4条词条)
-            local bossVariant = boss.variant or 1
-            -- variant 1~4 对应鱼种 id 7~10 (外海鱼)
-            local fishId = math.min(bossVariant + 6, 10)
-            local chosenFish = GameConfig.FISH_BY_ID[fishId]
-            if chosenFish then
-                -- 按鱼种品质权重随机品质
-                local weights = chosenFish.qualityWeights or GameConfig.DEFAULT_QUALITY_WEIGHTS
-                local qualityId = 1
-                local totalW = 0
-                for _, w in ipairs(weights) do totalW = totalW + w end
-                local roll = math.random() * totalW
-                local acc = 0
-                for qi, w in ipairs(weights) do
-                    acc = acc + w
-                    if roll <= acc then qualityId = qi; break end
-                end
-                -- 必定生成 2~4 词条
-                local affixes = AffixSystem.rollGuaranteedAffixes(2, 4)
-                -- 记录图鉴
-                CodexSystem.recordCatch(fishId, qualityId, affixes)
-                -- 添加词条鱼到个体鱼列表
-                local uid = GameState:addIndividualFish(fishId, qualityId, affixes)
-                -- 普通鱼仓也加一条
-                GameState:addFish(fishId, qualityId, 1)
-                local summary = AffixSystem.getAffixSummary(affixes)
-                local valueMult = AffixSystem.calcValueMultiplier(affixes)
-                print(string.format("[BossEvent] 词条鱼掉落! uid=%d %s 品质%d 词条×%d [%s] 价值×%.0f%%",
-                    uid, chosenFish.displayName, qualityId, #affixes, summary, valueMult * 100))
-                -- 显示词条弹窗
-                WaterScene.showAffixPopup({
-                    fishName = chosenFish.name,
-                    displayName = chosenFish.displayName,
-                    affixes = affixes,
-                    summary = summary,
-                    valueMult = valueMult,
-                    isBossDrop = true,
-                })
-            end
+            -- 获取逻辑屏幕尺寸
+            local physW = graphics:GetWidth()
+            local physH = graphics:GetHeight()
+            local dpr = graphics:GetDPR()
+            local w = physW / dpr
+            local h = physH / dpr
+
+            -- 统一奖励发放
+            RewardSystem.grantCatchReward(catchResult, {
+                screenX = w * 0.5,
+                screenY = h * 0.4,
+                w = w, h = h,
+                variant = boss.variant or 1,
+                dir = 1, size = 80,
+            })
+
+            print(string.format("[BossEvent] 鱼王被击败! %s 品质%d +%d币 词条[%s]",
+                catchResult.displayName, catchResult.qualityId,
+                catchResult.coinValue, catchResult.summary))
         end,
         function(boss)
             -- 鱼王逃跑

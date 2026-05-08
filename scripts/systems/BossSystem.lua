@@ -8,6 +8,9 @@
 --   4. 鱼王离场 → 暴风雨渐退 → 恢复正常
 -- ============================================================================
 
+local GameConfig = require("config.GameConfig")
+local GameState  = require("state.GameState")
+
 local BossSystem = {}
 
 -- ============================================================================
@@ -42,8 +45,8 @@ local CONFIG = {
     lightningMaxAlpha    = 0.7,  -- 闪光最大不透明度
 
     -- 鱼王
-    bossHp           = 10,     -- 鱼王总生命值
-    bossDamage       = 1,      -- 每次命中伤害
+    bossHp           = 600,    -- 鱼王总生命值
+    bossDamage       = 1,      -- 每次命中伤害 (已弃用, 由 calculateSwipeDamage 计算)
     bossSizeMult     = 3.0,    -- 大型鱼尺寸倍率
     bossBaseSize     = 105,    -- 大型鱼最大基准 (px)
     bossSpeed        = 0.04,   -- 穿越速度 (归一化/秒, ~25s穿屏)
@@ -91,6 +94,9 @@ local lightningIsDouble_  = false -- 本次是否双闪
 -- 回调
 local onBossDefeated_ = nil       -- fun(boss)
 local onBossEscaped_  = nil       -- fun(boss)
+
+-- 连击计数 (鱼王专属)
+local bossCombo_    = 0
 
 -- 命中去重 (每次滑动只命中一次)
 local hitThisSwipe_ = false
@@ -225,6 +231,7 @@ local function spawnBoss()
 
     hitFlashTimer_ = 0
     hitThisSwipe_ = false
+    bossCombo_ = 0
 
     print(string.format("[BossSystem] 鱼王生成! HP=%d, 方向=%s, Y=%.2f, size=%.0f",
         boss_.maxHp, side == 1 and "左→右" or "右→左", startY, size))
@@ -280,6 +287,29 @@ function BossSystem.getHitFlash()
         return hitFlashTimer_ / CONFIG.hitFlashDuration
     end
     return 0
+end
+
+--- 获取鱼王连击数
+function BossSystem.getCombo()
+    return bossCombo_
+end
+
+--- 根据连击数获取鱼王伤害倍率
+function BossSystem.getComboMultiplier(comboCount)
+    local multiplier = 1.0
+    for _, tier in ipairs(GameConfig.FISH_KING_COMBO) do
+        if comboCount >= tier.minCombo then
+            multiplier = tier.multiplier
+        end
+    end
+    return multiplier
+end
+
+--- 计算一次划击对鱼王的伤害
+function BossSystem.calculateSwipeDamage(shipTechLevel, comboCount)
+    local baseDamage = GameConfig.FISH_KING_DAMAGE[shipTechLevel] or 15
+    local comboMultiplier = BossSystem.getComboMultiplier(comboCount)
+    return math.floor(baseDamage * comboMultiplier)
 end
 
 --- 对鱼王造成伤害
@@ -422,7 +452,12 @@ function BossSystem.checkHit(x1, y1, x2, y2, screenW, screenH)
     local radius = boss_.size * CONFIG.bossHitRadius
 
     if lineCircleIntersect(x1, y1, x2, y2, bx, by, radius) then
-        return BossSystem.damageBoss(CONFIG.bossDamage)
+        bossCombo_ = bossCombo_ + 1
+        local shipTech = GameState.boatLevel or 1
+        local finalDmg = BossSystem.calculateSwipeDamage(shipTech, bossCombo_)
+        print(string.format("[BossSystem] 连击 %d, 倍率 x%.2f, 伤害 %d",
+            bossCombo_, BossSystem.getComboMultiplier(bossCombo_), finalDmg))
+        return BossSystem.damageBoss(finalDmg)
     end
 
     return false
