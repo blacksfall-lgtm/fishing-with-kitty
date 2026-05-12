@@ -365,7 +365,7 @@ function BreedingScene.renderSlotGrid(nvg, gx, gy, gw, gh)
     nvgFontSize(nvg, 14)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
     nvgFillColor(nvg, nvgRGBA(180, 220, 255, 200))
-    nvgText(nvg, gx + 10, gy + 6, "🐣 养殖槽位 (" .. GameState.unlockedBreedingSlots .. "/" .. GameConfig.BREEDING.MAX_SLOTS .. ")")
+    nvgText(nvg, gx + 10, gy + 6, "养殖槽位 (" .. GameState.unlockedBreedingSlots .. "/" .. GameConfig.BREEDING.MAX_SLOTS .. ")")
 
     -- 网格参数: 4 列
     local cols = 4
@@ -467,7 +467,7 @@ function BreedingScene.renderOccupiedCell(nvg, cx, cy, cw, ch, slotIdx, slot)
         nvgFontSize(nvg, 36)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-        nvgText(nvg, cx + cw * 0.5, cy + cw * 0.5, fishCfg and fishCfg.icon or "🐟")
+        nvgText(nvg, cx + cw * 0.5, cy + cw * 0.5, fishCfg and fishCfg.icon or "fish_sardine")
     end
 
     -- 点击鱼图片区域 → 显示 tips (第一条鱼)
@@ -649,11 +649,11 @@ function BreedingScene.renderLockedCell(nvg, cx, cy, cw, ch, slotIdx)
     nvgFontSize(nvg, 20)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(120, 120, 140, 150))
-    nvgText(nvg, cx + cw * 0.5, cy + cw * 0.4, "🔒")
+    nvgText(nvg, cx + cw * 0.5, cy + cw * 0.4, "锁定")
 
     nvgFontSize(nvg, 9)
     nvgFillColor(nvg, nvgRGBA(160, 160, 180, 140))
-    nvgText(nvg, cx + cw * 0.5, cy + cw * 0.7, FormatUtils.formatNumber(cost) .. "💰")
+    nvgText(nvg, cx + cw * 0.5, cy + cw * 0.7, FormatUtils.formatNumber(cost) .. " 金币")
 
     table.insert(clickRects_, {
         x = cx, y = cy, w = cw, h = ch,
@@ -754,13 +754,13 @@ function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
     textY = textY + 20
     nvgFontSize(nvg, 12)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 200))
-    nvgText(nvg, popX + popW * 0.5, textY, "💰 基础价值: " .. fishCfg.baseValue)
+    nvgText(nvg, popX + popW * 0.5, textY, "基础价值: " .. fishCfg.baseValue)
 
     -- 海域
     textY = textY + 18
     nvgFillColor(nvg, nvgRGBA(100, 180, 255, 180))
     nvgText(nvg, popX + popW * 0.5, textY,
-        "🌊 " .. (GameConfig.ZONE_DISPLAY[fishCfg.zone] or fishCfg.zone))
+        (GameConfig.ZONE_DISPLAY[fishCfg.zone] or fishCfg.zone))
 
     -- 词条信息
     if tipPopup_.affixes and #tipPopup_.affixes > 0 then
@@ -961,14 +961,14 @@ function BreedingScene.renderHUD(nvg, x, y, w, h)
     nvgFontSize(nvg, 17)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "🐣 养殖场")
+    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "养殖场")
 
     -- 金币
     nvgFontSize(nvg, 12)
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
     nvgText(nvg, x + w - 10, btnY + btnH * 0.5,
-        "💰 " .. FormatUtils.formatNumber(GameState.coins))
+        FormatUtils.formatNumber(GameState.coins) .. " 金币")
 end
 
 return BreedingScene

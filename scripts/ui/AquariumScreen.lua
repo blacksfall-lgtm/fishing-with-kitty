@@ -64,7 +64,7 @@ function AquariumScreen.build()
                         gap = 16,
                         children = {
                             UI.Label {
-                                text = "🏠 观赏鱼缸",
+                                text = "观赏鱼缸",
                                 fontSize = 18,
                                 fontWeight = "bold",
                                 fontColor = { 180, 200, 255, 255 },
@@ -174,7 +174,7 @@ function AquariumScreen.refreshSlots()
                 borderColor = { 60, 60, 80, 150 },
                 children = {
                     UI.Label {
-                        text = "🔒 " .. FormatUtils.formatNumber(cost) .. "💰",
+                        text = "锁定 " .. FormatUtils.formatNumber(cost) .. " 金币",
                         fontSize = 11,
                         fontColor = { 120, 120, 140, 255 },
                     },

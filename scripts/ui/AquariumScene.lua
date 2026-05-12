@@ -50,7 +50,7 @@ function AquariumScene.init(nvg)
 
     -- 注册收入回调
     AquariumSystem.onIncome = function(totalGold)
-        incomePopText_ = "+" .. FormatUtils.formatNumber(totalGold) .. " 💰"
+        incomePopText_ = "+" .. FormatUtils.formatNumber(totalGold)
         incomePopTimer_ = 2.0
     end
 
@@ -259,12 +259,12 @@ function AquariumScene.render(nvg, x, y, w, h)
     -- 2) 气泡粒子
     AquariumScene.renderBubbles(nvg, x, y, w, h)
 
-    -- ===== 布局: 养殖槽位(上) + 养殖区域(下) 两个独立面板 =====
+    -- ===== 布局: 鱼缸槽位(上) + 观赏区域(下) 两个独立面板 =====
     local hudH = 46
     local margin = 10
     local gap = 8  -- 面板间距
 
-    -- 养殖槽位区: 4列, 紧凑卡片
+    -- 鱼缸槽位区: 4列, 紧凑卡片
     local slotCols = 4
     local slotRows = math.ceil(GameConfig.AQUARIUM.MAX_SLOTS / slotCols)
     local slotCardH = 52  -- 紧凑卡片高度(原68太高)
@@ -282,7 +282,7 @@ function AquariumScene.render(nvg, x, y, w, h)
     local slotY = y + hudH
     AquariumScene.renderSlotPanel(nvg, x + margin, slotY, w - margin * 2, slotPanelH)
 
-    -- 2) 养殖区域 = 剩余全部空间 (最少 150px)
+    -- 2) 观赏区域 = 剩余全部空间 (最少 150px)
     local displayY = slotY + slotPanelH + gap
     local displayH = y + h - displayY - 6
     displayH = math.max(displayH, 150)
@@ -407,7 +407,7 @@ function AquariumScene.renderFishDisplay(nvg, x, y, w, h)
     nvgFontSize(nvg, 13)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(200, 230, 255, 230))
-    nvgText(nvg, x + 10, y + 2 + headerH * 0.5, "🌊 养殖区域")
+    nvgText(nvg, x + 10, y + 2 + headerH * 0.5, "观赏鱼缸")
 
     -- 收入信息 (右侧)
     local income = AquariumSystem:getEstimatedIncome()
@@ -416,7 +416,7 @@ function AquariumScene.renderFishDisplay(nvg, x, y, w, h)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 220))
     nvgFontSize(nvg, 11)
     nvgText(nvg, x + w - 10, y + 2 + headerH * 0.5,
-        "💰 " .. FormatUtils.formatNumber(income) .. "/" .. interval .. "s")
+        FormatUtils.formatNumber(income) .. "/" .. interval .. "s")
 
     -- ===== Buff 加成行 =====
     local buffY = y + headerH + 4
@@ -428,7 +428,7 @@ function AquariumScene.renderFishDisplay(nvg, x, y, w, h)
             table.insert(buffParts, buff.icon .. "+" .. FormatUtils.formatPercent(buff.value))
         end
     end
-    local buffText = #buffParts > 0 and ("🔮 " .. table.concat(buffParts, "  ")) or "🔮 暂无加成"
+    local buffText = #buffParts > 0 and (table.concat(buffParts, "  ")) or "暂无加成"
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 10)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
@@ -560,13 +560,13 @@ function AquariumScene.renderFishDisplay(nvg, x, y, w, h)
         end
     end
 
-    -- 空养殖区提示
+    -- 空鱼缸提示
     if fishCount == 0 then
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 15)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         nvgFillColor(nvg, nvgRGBA(100, 150, 200, 150))
-        nvgText(nvg, x + w * 0.5, y + h * 0.5, "养殖区空空的，在上方槽位放入鱼吧！")
+        nvgText(nvg, x + w * 0.5, y + h * 0.5, "鱼缸空空的，在上方槽位放入鱼吧！")
     end
 
 end
@@ -587,7 +587,7 @@ function AquariumScene.renderBuffPanel(nvg, x, y, w, h)
     nvgFontSize(nvg, 13)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
     nvgFillColor(nvg, nvgRGBA(180, 210, 255, 200))
-    nvgText(nvg, x + 10, y + 6, "🔮 全局加成")
+    nvgText(nvg, x + 10, y + 6, "全局加成")
 
     -- 收入信息(右侧)
     local income = AquariumSystem:getEstimatedIncome()
@@ -596,7 +596,7 @@ function AquariumScene.renderBuffPanel(nvg, x, y, w, h)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 200))
     nvgFontSize(nvg, 12)
     nvgText(nvg, x + w - 10, y + 7,
-        "💰 " .. FormatUtils.formatNumber(income) .. "/" .. interval .. "s")
+        FormatUtils.formatNumber(income) .. "/" .. interval .. "s")
 
     -- Buff 条目 (2x2 网格)
     local buffs = AquariumSystem:getBuffSummary()
@@ -655,7 +655,7 @@ function AquariumScene.renderSlotPanel(nvg, px, py, pw, ph)
     nvgFontSize(nvg, 13)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
     nvgFillColor(nvg, nvgRGBA(200, 220, 255, 220))
-    nvgText(nvg, px + 10, py + 6, string.format("🐟 养殖槽位 (%d/%d)",
+    nvgText(nvg, px + 10, py + 6, string.format("鱼缸槽位 (%d/%d)",
         usedCount, GameState.unlockedAquariumSlots))
 
     -- 槽位卡片 (4列布局, 竖向紧凑)
@@ -716,7 +716,7 @@ function AquariumScene.renderOccupiedSlot(nvg, x, y, w, h, slotIdx, slot)
         -- 大卡片: 图标 + 名称 + buff + 取出
         nvgFontSize(nvg, 18)
         nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-        nvgText(nvg, x + w * 0.5, y + 14, fishCfg and fishCfg.icon or "🐟")
+        nvgText(nvg, x + w * 0.5, y + 14, fishCfg and fishCfg.icon or "fish_sardine")
 
         nvgFontSize(nvg, 8)
         nvgFillColor(nvg, nvgRGBA(210, 225, 250, 210))
@@ -752,7 +752,7 @@ function AquariumScene.renderOccupiedSlot(nvg, x, y, w, h, slotIdx, slot)
         -- 小卡片: 图标 + 名称单行
         nvgFontSize(nvg, 14)
         nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-        nvgText(nvg, x + w * 0.35, y + h * 0.5, fishCfg and fishCfg.icon or "🐟")
+        nvgText(nvg, x + w * 0.35, y + h * 0.5, fishCfg and fishCfg.icon or "fish_sardine")
 
         nvgFontSize(nvg, 8)
         nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
@@ -824,7 +824,7 @@ function AquariumScene.renderLockedSlot(nvg, x, y, w, h, slotIdx)
         -- 大卡片: 锁图标 + 费用 分两行
         nvgFontSize(nvg, 14)
         nvgFillColor(nvg, nvgRGBA(150, 150, 170, 140))
-        nvgText(nvg, x + w * 0.5, y + h * 0.35, "🔒")
+        nvgText(nvg, x + w * 0.5, y + h * 0.35, "锁定")
         nvgFontSize(nvg, 8)
         nvgFillColor(nvg, nvgRGBA(255, 215, 0, 160))
         nvgText(nvg, x + w * 0.5, y + h * 0.7, FormatUtils.formatNumber(cost))
@@ -832,7 +832,7 @@ function AquariumScene.renderLockedSlot(nvg, x, y, w, h, slotIdx)
         -- 小卡片: 单行 锁+费用
         nvgFontSize(nvg, 10)
         nvgFillColor(nvg, nvgRGBA(150, 150, 170, 140))
-        nvgText(nvg, x + w * 0.5, y + h * 0.5, "🔒 " .. FormatUtils.formatNumber(cost))
+        nvgText(nvg, x + w * 0.5, y + h * 0.5, "锁定 " .. FormatUtils.formatNumber(cost))
     end
 
     table.insert(clickRects_, {
@@ -1013,14 +1013,14 @@ function AquariumScene.renderHUD(nvg, x, y, w, h)
     nvgFontSize(nvg, 18)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(150, 210, 255, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "🏠 养殖场")
+    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "观赏鱼缸")
 
     -- 金币
     nvgFontSize(nvg, 13)
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
     nvgText(nvg, x + w - 12, btnY + btnH * 0.5,
-        "💰 " .. FormatUtils.formatNumber(GameState.coins))
+        FormatUtils.formatNumber(GameState.coins) .. " 金币")
 end
 
 return AquariumScene

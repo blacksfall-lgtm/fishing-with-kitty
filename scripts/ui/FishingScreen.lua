@@ -23,7 +23,7 @@ function FishingScreen.build()
 
     -- ---------- 顶部信息栏 ----------
     zoneLabel_ = UI.Label {
-        text = "📍 " .. GameConfig.ZONE_DISPLAY[GameState.currentZone],
+        text = GameConfig.ZONE_DISPLAY[GameState.currentZone],
         fontSize = 12,
         fontColor = { 180, 220, 255, 200 },
     }
@@ -67,7 +67,7 @@ function FishingScreen.build()
         local isActive = (GameState.currentZone == zn)
         table.insert(zoneButtons, UI.Button {
             id = "zone_" .. zn,
-            text = (isActive and "● " or "") .. GameConfig.ZONE_DISPLAY[zn] .. (not unlocked and " 🔒" or ""),
+            text = (isActive and "● " or "") .. GameConfig.ZONE_DISPLAY[zn] .. (not unlocked and "" or ""),
             fontSize = 11,
             height = 30,
             flexGrow = 1,
@@ -148,7 +148,7 @@ end
 
 function FishingScreen.refreshZone()
     if zoneLabel_ then
-        zoneLabel_:SetText("📍 " .. GameConfig.ZONE_DISPLAY[GameState.currentZone])
+        zoneLabel_:SetText(GameConfig.ZONE_DISPLAY[GameState.currentZone])
     end
     if not screenRoot_ then return end
     for _, zoneName in ipairs({"nearshore", "offshore"}) do
@@ -156,7 +156,7 @@ function FishingScreen.refreshZone()
         if btn then
             local isActive = (GameState.currentZone == zoneName)
             local unlocked = GameState.unlockedZones[zoneName]
-            btn:SetText((isActive and "● " or "") .. GameConfig.ZONE_DISPLAY[zoneName] .. (not unlocked and " 🔒" or ""))
+            btn:SetText((isActive and "● " or "") .. GameConfig.ZONE_DISPLAY[zoneName] .. (not unlocked and "" or ""))
             btn:SetStyle({
                 backgroundColor = isActive
                     and { 40, 100, 170, 255 } or { 35, 45, 65, 255 },

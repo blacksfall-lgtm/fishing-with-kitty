@@ -81,11 +81,11 @@ local upgradePopup_ = {
 }
 
 local ZONE_LIST = {
-    { key = "nearshore", name = "近海", icon = "🏖️", desc = "平静浅滩" },
-    { key = "offshore",  name = "外海", icon = "🌊", desc = "风浪渐起" },
-    { key = "deepocean", name = "深海", icon = "🐙", desc = "幽暗深处" },
-    { key = "abyss",     name = "深渊", icon = "🌀", desc = "未知领域" },
-    { key = "legendary", name = "传说", icon = "🐉", desc = "传说之海" },
+    { key = "nearshore", name = "近海", icon = "zone_beach", desc = "平静浅滩" },
+    { key = "offshore",  name = "外海", icon = "zone_ocean", desc = "风浪渐起" },
+    { key = "deepocean", name = "深海", icon = "zone_deep", desc = "幽暗深处" },
+    { key = "abyss",     name = "深渊", icon = "zone_abyss", desc = "未知领域" },
+    { key = "legendary", name = "传说", icon = "zone_legend", desc = "传说之海" },
 }
 
 -- 解锁确认弹窗状态
@@ -99,9 +99,9 @@ local unlockPopup_ = {
 }
 
 local BAIT_LIST = {
-    { id = 1, name = "普通鱼饵", icon = "🪱", desc = "基础饵料，什么鱼都能钓", cost = 0 },
-    { id = 2, name = "香甜鱼饵", icon = "🍯", desc = "吸引稀有鱼，品质提升",   cost = 50 },
-    { id = 3, name = "闪光鱼饵", icon = "✨", desc = "大幅提升稀有鱼概率",     cost = 200 },
+    { id = 1, name = "普通鱼饵", icon = "worm", desc = "基础饵料，什么鱼都能钓", cost = 0 },
+    { id = 2, name = "香甜鱼饵", icon = "candy_bait", desc = "吸引稀有鱼，品质提升",   cost = 50 },
+    { id = 3, name = "闪光鱼饵", icon = "shiny_bait", desc = "大幅提升稀有鱼概率",     cost = 200 },
 }
 
 -- Toast 提示
@@ -210,16 +210,16 @@ function IndustryScene.init(nvg)
 
     -- 鱼类图标
     local fishImageMap = {
-        sardine    = "image/fish_sardine_20260426161404.png",
-        clownfish  = "image/fish_clownfish_20260426154607.png",
-        bubblefish = "image/fish_bubblefish_20260426161340.png",
-        coralfish  = "image/fish_coralfish_20260426154605.png",
-        shellfish  = "image/fish_shellfish_20260426154603.png",
-        bluefin    = "image/fish_bluefin_20260426155305.png",
-        flyingfish = "image/fish_flyingfish_20260426155458.png",
-        silverfish = "image/fish_silverfish_20260426155454.png",
-        gemfish    = "image/fish_gemfish_20260426155453.png",
-        octopus    = "image/fish_octopus_20260426155724.png",
+        sardine    = "image/fish/fish_sardine.png",
+        clownfish  = "image/fish/fish_clownfish.png",
+        bubblefish = "image/fish/fish_bubblefish.png",
+        coralfish  = "image/fish/fish_coralfish.png",
+        shellfish  = "image/fish/fish_shellfish.png",
+        bluefin    = "image/fish/fish_bluefin.png",
+        flyingfish = "image/fish/fish_flyingfish.png",
+        silverfish = "image/fish/fish_silverfish.png",
+        gemfish    = "image/fish/fish_gemfish.png",
+        octopus    = "image/fish/fish_octopus.png",
     }
     for name, path in pairs(fishImageMap) do
         local img = nvgCreateImage(nvg, path, NVG_IMAGE_PREMULTIPLIED)
@@ -1540,11 +1540,11 @@ function IndustryScene.renderGoFishingBtn(nvg, x, y, w, h)
 
     -- 按钮定义: {icon图片, fallback emoji, 标签, action}
     local buttons = {
-        { img = imgCodex_,     fallback = "📖", label = "图鉴", action = "go_codex" },
-        { img = imgResearch_,  fallback = "🔬", label = "研发", action = "go_research" },
-        { img = imgBreeding_,  fallback = "🐣", label = "养殖", action = "go_breeding" },
-        { img = imgAquarium_,  fallback = "🐠", label = "鱼缸", action = "go_aquarium" },
-        { img = imgAnchor_,    fallback = "⚓", label = "出海", action = "go_fishing" },
+        { img = imgCodex_,     fallback = "codex", label = "图鉴", action = "go_codex" },
+        { img = imgResearch_,  fallback = "research", label = "研发", action = "go_research" },
+        { img = imgBreeding_,  fallback = "egg", label = "养殖", action = "go_breeding" },
+        { img = imgAquarium_,  fallback = "aquarium", label = "鱼缸", action = "go_aquarium" },
+        { img = imgAnchor_,    fallback = "anchor", label = "出海", action = "go_fishing" },
     }
 
     for i, btn in ipairs(buttons) do
@@ -1725,7 +1725,7 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
     nvgFontSize(nvg, 17)
     nvgFillColor(nvg, nvgRGBA(60, 50, 40, 255))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, px + panelW * 0.5, curY, "⚓ 出海准备")
+    nvgText(nvg, px + panelW * 0.5, curY, "出海准备")
     curY = curY + 26
 
     -- ── 分割线 ──
@@ -1788,7 +1788,7 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
             nvgText(nvg, contentX + contentW - 8, zy + zoneItemH * 0.5, zone.desc)
         else
             nvgFillColor(nvg, nvgRGBA(180, 140, 40, 200))
-            nvgText(nvg, contentX + contentW - 8, zy + zoneItemH * 0.5, "🔒 " .. FormatUtils.formatNumber(cost) .. "💰")
+            nvgText(nvg, contentX + contentW - 8, zy + zoneItemH * 0.5, "" .. FormatUtils.formatNumber(cost) .. " 金币")
         end
 
         -- 点击区域：已解锁选中，未解锁弹确认
@@ -1854,7 +1854,7 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
             nvgFillColor(nvg, nvgRGBA(200, 160, 40, 255))
             nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
             nvgText(nvg, contentX + contentW - 8, by + baitItemH * 0.5,
-                "💰 " .. bait.cost)
+                FormatUtils.formatNumber(bait.cost) .. " 金币")
         else
             nvgFontSize(nvg, 10)
             nvgFillColor(nvg, nvgRGBA(100, 170, 80, 220))
@@ -1932,7 +1932,7 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
             coinColor = nvgRGBA(220, 60, 50, 255)  -- 红色：余额不足
         end
         nvgFillColor(nvg, coinColor)
-        nvgText(nvg, popX + popW * 0.5, popY + 32, "💰 " .. FormatUtils.formatNumber(unlockPopup_.cost))
+        nvgText(nvg, popX + popW * 0.5, popY + 32, FormatUtils.formatNumber(unlockPopup_.cost) .. " 金币")
 
         -- 当前金币
         nvgFontSize(nvg, 10)
@@ -2104,7 +2104,7 @@ function IndustryScene.renderSynthesisQueue(nvg, ax, ay, aw)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         if nextCost > 0 then
             nvgText(nvg, ubtnX + ubtnW * 0.5, ubtnY + ubtnH * 0.5,
-                "扩容 💰" .. FormatUtils.formatNumber(nextCost))
+                "扩容 " .. FormatUtils.formatNumber(nextCost) .. " 金币")
         else
             nvgText(nvg, ubtnX + ubtnW * 0.5, ubtnY + ubtnH * 0.5, "扩容 (免费)")
         end
@@ -2129,7 +2129,7 @@ function IndustryScene.renderSynthesisQueue(nvg, ax, ay, aw)
         local sy = gridY + row * (slotSize + slotGap + 14)
 
         if i > unlocked then
-            -- 🔒 锁定槽位
+            -- 锁定槽位
             nvgBeginPath(nvg)
             nvgRoundedRect(nvg, sx, sy, slotSize, slotSize, 6)
             nvgFillColor(nvg, nvgRGBA(100, 95, 85, 60))
@@ -2141,9 +2141,9 @@ function IndustryScene.renderSynthesisQueue(nvg, ax, ay, aw)
             nvgFontSize(nvg, 18)
             nvgFillColor(nvg, nvgRGBA(140, 130, 115, 120))
             nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, sx + slotSize * 0.5, sy + slotSize * 0.5, "🔒")
+            nvgText(nvg, sx + slotSize * 0.5, sy + slotSize * 0.5, "锁定")
         elseif queue[i] then
-            -- 🔄 合成中
+            -- 合成中
             local slot = queue[i]
             local recipe = GameConfig.SUSHI_BY_ID[slot.recipeId]
             local progress = 1.0 - (slot.timer / slot.totalTime)
@@ -2255,7 +2255,7 @@ function IndustryScene.renderUpgradePopup(nvg, x, y, w, h)
     -- 售价变化
     nvgFontSize(nvg, 13)
     nvgFillColor(nvg, nvgRGBA(160, 120, 20, 230))
-    nvgText(nvg, centerX, ty, string.format("售价: %s → %s 💰",
+    nvgText(nvg, centerX, ty, string.format("售价: %s → %s 金币",
         FormatUtils.formatNumber(upgradePopup_.curPrice),
         FormatUtils.formatNumber(upgradePopup_.nextPrice)))
     ty = ty + 24
@@ -2281,7 +2281,7 @@ function IndustryScene.renderUpgradePopup(nvg, x, y, w, h)
     local coinOk = GameState.coins >= upgradePopup_.cost
     nvgFillColor(nvg, coinOk and nvgRGBA(80, 70, 50, 220) or nvgRGBA(220, 50, 30, 240))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, centerX, ty, string.format("💰 %s / %s",
+    nvgText(nvg, centerX, ty, string.format("金币 %s / %s",
         FormatUtils.formatNumber(upgradePopup_.cost),
         FormatUtils.formatNumber(GameState.coins)))
     ty = ty + 18
@@ -2390,7 +2390,7 @@ function IndustryScene.renderRecipeCard(nvg, cx, cy, cw, recipe)
         nvgFontSize(nvg, 14)
         nvgFillColor(nvg, nvgRGBA(140, 130, 115, 180))
         nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgText(nvg, textX, textY, "🔒 " .. recipe.displayName)
+        nvgText(nvg, textX, textY, "锁定 " .. recipe.displayName)
         nvgFontSize(nvg, 11)
         nvgFillColor(nvg, nvgRGBA(160, 140, 110, 160))
         nvgText(nvg, textX, textY + 20,
@@ -2419,7 +2419,7 @@ function IndustryScene.renderRecipeCard(nvg, cx, cy, cw, recipe)
     nvgFontSize(nvg, 12)
     nvgFillColor(nvg, nvgRGBA(160, 120, 20, 230))
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
-    nvgText(nvg, rightX, textY, FormatUtils.formatNumber(sellPrice) .. "💰")
+    nvgText(nvg, rightX, textY, FormatUtils.formatNumber(sellPrice) .. " 金币")
 
     local stock = GameState:getFoodCount(recipe.id)
     nvgFontSize(nvg, 10)

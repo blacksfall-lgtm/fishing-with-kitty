@@ -147,17 +147,35 @@ function GameState:getLowestQualityFish(fishId)
     return nil
 end
 
---- 检查是否有足够的鱼来制作寿司
+--- 获取普通鱼数量（总数 - 词条鱼个体数），用于配方消耗判断
+--- 词条鱼是特殊个体，不应被配方/升级自动消耗
+function GameState:getNormalFishCount(fishId, qualityId)
+    if qualityId then
+        local total = self.fishInventory[GameState.makeFishKey(fishId, qualityId)] or 0
+        local indivCount = self:getIndividualCount(fishId, qualityId)
+        return math.max(0, total - indivCount)
+    end
+    -- 不指定品质则合计所有品质的普通鱼
+    local total = 0
+    for q = 1, 5 do
+        local inv = self.fishInventory[GameState.makeFishKey(fishId, q)] or 0
+        local indiv = self:getIndividualCount(fishId, q)
+        total = total + math.max(0, inv - indiv)
+    end
+    return total
+end
+
+--- 检查是否有足够的普通鱼来制作寿司（排除词条鱼）
 function GameState:hasIngredientsForRecipe(recipe)
     for _, ing in ipairs(recipe.ingredients) do
-        if self:getFishCount(ing.fishId) < ing.count then
+        if self:getNormalFishCount(ing.fishId) < ing.count then
             return false
         end
     end
     return true
 end
 
---- 消耗配方所需的鱼（优先消耗低品质）
+--- 消耗配方所需的普通鱼（优先消耗低品质，排除词条鱼）
 function GameState:consumeIngredientsForRecipe(recipe)
     if not self:hasIngredientsForRecipe(recipe) then return false end
     for _, ing in ipairs(recipe.ingredients) do
@@ -165,10 +183,12 @@ function GameState:consumeIngredientsForRecipe(recipe)
         for q = 1, 5 do
             if remaining <= 0 then break end
             local key = GameState.makeFishKey(ing.fishId, q)
-            local available = self.fishInventory[key] or 0
-            local consume = math.min(available, remaining)
+            local total = self.fishInventory[key] or 0
+            local indivCount = self:getIndividualCount(ing.fishId, q)
+            local normalAvail = math.max(0, total - indivCount)
+            local consume = math.min(normalAvail, remaining)
             if consume > 0 then
-                self.fishInventory[key] = available - consume
+                self.fishInventory[key] = total - consume
                 if self.fishInventory[key] <= 0 then
                     self.fishInventory[key] = nil
                 end
@@ -295,27 +315,29 @@ function GameState:upgradeRecipe(recipeId, cost, fishReqs)
     if cur >= GameConfig.RECIPE_MAX_LEVEL then return false end
     -- 检查金币
     if self.coins < cost then return false end
-    -- 检查鱼材料
+    -- 检查鱼材料（只检查普通鱼，排除词条鱼）
     if fishReqs then
         for _, req in ipairs(fishReqs) do
-            if self:getFishCount(req.fishId) < req.count then
+            if self:getNormalFishCount(req.fishId) < req.count then
                 return false
             end
         end
     end
     -- 扣除金币
     if not self:spendCoins(cost) then return false end
-    -- 扣除鱼材料（优先消耗低品质）
+    -- 扣除鱼材料（优先消耗低品质普通鱼，排除词条鱼）
     if fishReqs then
         for _, req in ipairs(fishReqs) do
             local remaining = req.count
             for q = 1, 5 do
                 if remaining <= 0 then break end
                 local key = GameState.makeFishKey(req.fishId, q)
-                local available = self.fishInventory[key] or 0
-                local consume = math.min(available, remaining)
+                local total = self.fishInventory[key] or 0
+                local indivCount = self:getIndividualCount(req.fishId, q)
+                local normalAvail = math.max(0, total - indivCount)
+                local consume = math.min(normalAvail, remaining)
                 if consume > 0 then
-                    self.fishInventory[key] = available - consume
+                    self.fishInventory[key] = total - consume
                     if self.fishInventory[key] <= 0 then
                         self.fishInventory[key] = nil
                     end

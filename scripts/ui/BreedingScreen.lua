@@ -51,7 +51,7 @@ function BreedingScreen.build()
                         gap = 16,
                         children = {
                             UI.Label {
-                                text = "🐟 养殖场",
+                                text = "养殖场",
                                 fontSize = 18,
                                 fontWeight = "bold",
                                 fontColor = { 150, 230, 200, 255 },
@@ -100,11 +100,11 @@ function BreedingScreen.refreshSlots()
                 borderColor = { 60, 60, 80, 150 },
                 children = {
                     UI.Label {
-                        text = "🔒",
+                        text = "锁定",
                         fontSize = 20,
                     },
                     UI.Button {
-                        text = "解锁 (" .. FormatUtils.formatNumber(cost) .. "💰)",
+                        text = "解锁 (" .. FormatUtils.formatNumber(cost) .. " 金币)",
                         fontSize = 11,
                         height = 30,
                         backgroundColor = { 60, 100, 70, 255 },

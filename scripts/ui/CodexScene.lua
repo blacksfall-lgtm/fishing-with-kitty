@@ -192,7 +192,7 @@ function CodexScene.renderHUD(nvg, x, y, w, h)
     nvgFontSize(nvg, 17)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "📖 图鉴")
+    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "图鉴")
 
     -- 总进度
     local fc, ft, ac, at = CodexSystem.getOverallProgress()
@@ -209,8 +209,8 @@ end
 
 function CodexScene.renderTabBar(nvg, x, y, w, h)
     local tabs = {
-        { id = 1, label = "🐟 鱼种图鉴" },
-        { id = 2, label = "✨ 词条图鉴" },
+        { id = 1, label = "鱼种图鉴" },
+        { id = 2, label = "词条图鉴" },
     }
     local tabCount = #tabs
     local gap = 4

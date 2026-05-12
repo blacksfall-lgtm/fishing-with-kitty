@@ -182,10 +182,10 @@ end
 --- 获取当前Buff汇总（用于UI展示）
 function AquariumSystem:getBuffSummary()
     return {
-        { name = "寿司售价", icon = "🍣", value = GameState.cachedBuffs.sushiPrice },
-        { name = "加工速度", icon = "⚡", value = GameState.cachedBuffs.processSpeed },
-        { name = "金币倍率", icon = "💰", value = GameState.cachedBuffs.coinMultiplier },
-        { name = "组合加成", icon = "🎯", value = GameState.cachedBuffs.comboBonus },
+        { name = "寿司售价", icon = "sushi", value = GameState.cachedBuffs.sushiPrice },
+        { name = "加工速度", icon = "lightning", value = GameState.cachedBuffs.processSpeed },
+        { name = "金币倍率", icon = "coin", value = GameState.cachedBuffs.coinMultiplier },
+        { name = "组合加成", icon = "target", value = GameState.cachedBuffs.comboBonus },
     }
 end
 

@@ -36,7 +36,7 @@ end
 function UIManager:buildCurrencyBar()
     coinsLabel_ = UI.Label {
         id = "coinsLabel",
-        text = "💰 " .. FormatUtils.formatNumber(GameState.coins),
+        text = FormatUtils.formatNumber(GameState.coins) .. " 金币",
         fontSize = 16,
         fontWeight = "bold",
         fontColor = { 255, 215, 0, 255 },
@@ -55,7 +55,7 @@ function UIManager:buildCurrencyBar()
                 backgroundColor = { 10, 20, 40, 200 },
                 children = {
                     UI.Label {
-                        text = "🐱 钓鱼大亨",
+                        text = "钓鱼大亨",
                         fontSize = 15,
                         fontWeight = "bold",
                         fontColor = { 200, 220, 255, 255 },
@@ -70,7 +70,7 @@ end
 --- 刷新货币显示
 function UIManager:refreshCoins()
     if coinsLabel_ then
-        coinsLabel_:SetText("💰 " .. FormatUtils.formatNumber(GameState.coins))
+        coinsLabel_:SetText(FormatUtils.formatNumber(GameState.coins) .. " 金币")
     end
 end
 

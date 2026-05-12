@@ -165,8 +165,8 @@ function IndustrySystem:cookFood(recipeId)
     -- 消耗材料
     GameState:consumeIngredientsForRecipe(recipe)
 
-    -- 加入队列
-    local totalTime = GameConfig.INDUSTRY.SYNTHESIS_BASE_TIME
+    -- 加入队列（使用配方自身的加工时间）
+    local totalTime = recipe.processTime or GameConfig.INDUSTRY.SYNTHESIS_BASE_TIME
     GameState.synthesisQueue[freeSlot] = {
         recipeId = recipeId,
         timer = totalTime,

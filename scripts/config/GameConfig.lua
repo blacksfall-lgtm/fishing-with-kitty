@@ -46,79 +46,222 @@ GameConfig.ZONE_DISPLAY = {
     legendary = "传说之海",
 }
 
--- ========== 10种鱼配置 (MVP: 6近海+4外海) ==========
+-- ========== 30种鱼配置 (每海域6种) ==========
 GameConfig.FISH = {
-    -- 近海 6种
+    -- ====== 近海 nearshore (id 1-6) ======
     {
-        id = 1, name = "sardine", displayName = "小沙丁鱼", icon = "🐟",
+        id = 1, name = "sardine", displayName = "小沙丁鱼", icon = "fish_sardine",
         zone = "nearshore", fishType = "producer", rarity = "common",
         baseValue = 10, catchWeight = 30,
         qualityWeights = { 60, 25, 10, 4, 1 },
         desc = "最常见的近海鱼，新手的好伙伴",
     },
     {
-        id = 2, name = "clownfish", displayName = "小丑鱼", icon = "🐠",
+        id = 2, name = "clownfish", displayName = "小丑鱼", icon = "fish_clownfish",
         zone = "nearshore", fishType = "producer", rarity = "common",
         baseValue = 18, catchWeight = 25,
         qualityWeights = { 55, 28, 12, 4, 1 },
         desc = "色彩鲜艳的热带鱼",
     },
     {
-        id = 3, name = "bubblefish", displayName = "泡泡鱼", icon = "🫧",
+        id = 3, name = "bubblefish", displayName = "泡泡鱼", icon = "fish_bubblefish",
         zone = "nearshore", fishType = "accelerator", rarity = "common",
         baseValue = 15, catchWeight = 22,
         qualityWeights = { 58, 26, 11, 4, 1 },
         desc = "会吐泡泡的可爱小鱼",
     },
     {
-        id = 4, name = "coralfish", displayName = "珊瑚鱼", icon = "🪸",
+        id = 4, name = "coralfish", displayName = "珊瑚鱼", icon = "fish_coralfish",
         zone = "nearshore", fishType = "amplifier", rarity = "uncommon",
         baseValue = 22, catchWeight = 18,
         qualityWeights = { 55, 27, 12, 5, 1 },
         desc = "珊瑚丛中的增幅鱼",
     },
     {
-        id = 5, name = "shellfish", displayName = "贝壳鱼", icon = "🐚",
+        id = 5, name = "shellfish", displayName = "贝壳鱼", icon = "fish_shellfish",
         zone = "nearshore", fishType = "combo", rarity = "uncommon",
         baseValue = 25, catchWeight = 15,
         qualityWeights = { 52, 28, 13, 5, 2 },
         desc = "带着贝壳的奇特组合鱼",
     },
     {
-        id = 6, name = "bluefin", displayName = "蓝鳍鱼", icon = "🐟",
+        id = 6, name = "bluefin", displayName = "蓝鳍鱼", icon = "fish_bluefin",
         zone = "nearshore", fishType = "producer", rarity = "rare",
         baseValue = 35, catchWeight = 10,
         qualityWeights = { 50, 28, 14, 6, 2 },
         desc = "近海最有价值的鱼",
     },
-    -- 外海 4种
+    -- ====== 外海 offshore (id 7-12) ======
     {
-        id = 7, name = "flyingfish", displayName = "飞鱼", icon = "🦅",
+        id = 7, name = "flyingfish", displayName = "飞鱼", icon = "fish_flyingfish",
         zone = "offshore", fishType = "accelerator", rarity = "uncommon",
         baseValue = 60, catchWeight = 28,
         qualityWeights = { 50, 28, 14, 6, 2 },
         desc = "能飞出水面的加速型鱼",
     },
     {
-        id = 8, name = "silverfish", displayName = "银枪鱼", icon = "🗡️",
+        id = 8, name = "silverfish", displayName = "银枪鱼", icon = "fish_silverfish",
         zone = "offshore", fishType = "producer", rarity = "rare",
         baseValue = 90, catchWeight = 25,
         qualityWeights = { 48, 28, 15, 7, 2 },
         desc = "外海主力产出鱼",
     },
     {
-        id = 9, name = "gemfish", displayName = "宝石鱼", icon = "💎",
+        id = 9, name = "gemfish", displayName = "宝石鱼", icon = "fish_gemfish",
         zone = "offshore", fishType = "amplifier", rarity = "epic",
         baseValue = 130, catchWeight = 18,
         qualityWeights = { 45, 28, 16, 8, 3 },
         desc = "闪闪发光的增幅鱼",
     },
     {
-        id = 10, name = "octopus", displayName = "章鱼", icon = "🐙",
+        id = 10, name = "octopus", displayName = "章鱼", icon = "fish_octopus",
         zone = "offshore", fishType = "combo", rarity = "epic",
         baseValue = 180, catchWeight = 12,
         qualityWeights = { 42, 28, 17, 9, 4 },
         desc = "高级组合型鱼",
+    },
+    {
+        id = 11, name = "swordfish", displayName = "旗鱼", icon = "fish_swordfish",
+        zone = "offshore", fishType = "producer", rarity = "common",
+        baseValue = 55, catchWeight = 26,
+        qualityWeights = { 52, 27, 14, 5, 2 },
+        desc = "带着长嘴的高速猎手",
+    },
+    {
+        id = 12, name = "seahorse", displayName = "海马", icon = "fish_seahorse",
+        zone = "offshore", fishType = "accelerator", rarity = "uncommon",
+        baseValue = 70, catchWeight = 20,
+        qualityWeights = { 48, 28, 15, 7, 2 },
+        desc = "直立游泳的优雅小鱼",
+    },
+    -- ====== 深海 deepocean (id 13-18) ======
+    {
+        id = 13, name = "anglerfish", displayName = "灯笼鱼", icon = "fish_anglerfish",
+        zone = "deepocean", fishType = "producer", rarity = "uncommon",
+        baseValue = 200, catchWeight = 28,
+        qualityWeights = { 45, 28, 16, 8, 3 },
+        desc = "头顶发光灯笼的深海鱼",
+    },
+    {
+        id = 14, name = "jellyfish", displayName = "水母鱼", icon = "fish_jellyfish",
+        zone = "deepocean", fishType = "accelerator", rarity = "uncommon",
+        baseValue = 220, catchWeight = 25,
+        qualityWeights = { 44, 28, 16, 9, 3 },
+        desc = "半透明的优雅深海舞者",
+    },
+    {
+        id = 15, name = "viperfish", displayName = "蝰蛇鱼", icon = "fish_viperfish",
+        zone = "deepocean", fishType = "amplifier", rarity = "rare",
+        baseValue = 280, catchWeight = 20,
+        qualityWeights = { 42, 27, 18, 9, 4 },
+        desc = "长着尖牙的深海猎手",
+    },
+    {
+        id = 16, name = "nautilus", displayName = "鹦鹉螺", icon = "fish_nautilus",
+        zone = "deepocean", fishType = "combo", rarity = "rare",
+        baseValue = 320, catchWeight = 16,
+        qualityWeights = { 40, 28, 18, 10, 4 },
+        desc = "远古活化石，组合效果极强",
+    },
+    {
+        id = 17, name = "dragonfish", displayName = "龙鱼", icon = "fish_dragonfish",
+        zone = "deepocean", fishType = "producer", rarity = "epic",
+        baseValue = 400, catchWeight = 13,
+        qualityWeights = { 38, 27, 19, 11, 5 },
+        desc = "深海之龙，价值极高",
+    },
+    {
+        id = 18, name = "glowsquid", displayName = "荧光鱿", icon = "fish_glowsquid",
+        zone = "deepocean", fishType = "accelerator", rarity = "epic",
+        baseValue = 350, catchWeight = 15,
+        qualityWeights = { 40, 27, 18, 10, 5 },
+        desc = "全身散发荧光的深海鱿鱼",
+    },
+    -- ====== 深渊 abyss (id 19-24) ======
+    {
+        id = 19, name = "abysseel", displayName = "深渊鳗", icon = "fish_abysseel",
+        zone = "abyss", fishType = "producer", rarity = "rare",
+        baseValue = 600, catchWeight = 26,
+        qualityWeights = { 38, 27, 19, 11, 5 },
+        desc = "深渊裂谷中蜿蜒的长鳗",
+    },
+    {
+        id = 20, name = "phantomray", displayName = "幻影鳐", icon = "fish_phantomray",
+        zone = "abyss", fishType = "accelerator", rarity = "rare",
+        baseValue = 650, catchWeight = 22,
+        qualityWeights = { 36, 27, 20, 12, 5 },
+        desc = "如幽灵般滑行的深渊鳐鱼",
+    },
+    {
+        id = 21, name = "crystalshrimp", displayName = "水晶虾", icon = "fish_crystalshrimp",
+        zone = "abyss", fishType = "amplifier", rarity = "epic",
+        baseValue = 750, catchWeight = 18,
+        qualityWeights = { 34, 26, 21, 13, 6 },
+        desc = "身体如水晶般透明的深渊虾",
+    },
+    {
+        id = 22, name = "shadowwhale", displayName = "暗影鲸", icon = "fish_shadowwhale",
+        zone = "abyss", fishType = "combo", rarity = "epic",
+        baseValue = 900, catchWeight = 14,
+        qualityWeights = { 32, 26, 22, 14, 6 },
+        desc = "深渊之中的巨型暗影",
+    },
+    {
+        id = 23, name = "voidcrab", displayName = "虚空蟹", icon = "fish_voidcrab",
+        zone = "abyss", fishType = "producer", rarity = "uncommon",
+        baseValue = 550, catchWeight = 24,
+        qualityWeights = { 40, 27, 18, 10, 5 },
+        desc = "坚甲如铁的深渊螃蟹",
+    },
+    {
+        id = 24, name = "abyssjelly", displayName = "深渊海蜇", icon = "fish_abyssjelly",
+        zone = "abyss", fishType = "accelerator", rarity = "rare",
+        baseValue = 700, catchWeight = 20,
+        qualityWeights = { 36, 27, 20, 12, 5 },
+        desc = "散发诡异光芒的巨型海蜇",
+    },
+    -- ====== 传说之海 legendary (id 25-30) ======
+    {
+        id = 25, name = "goldendragon", displayName = "金龙鱼", icon = "fish_goldendragon",
+        zone = "legendary", fishType = "producer", rarity = "epic",
+        baseValue = 1500, catchWeight = 24,
+        qualityWeights = { 30, 25, 22, 15, 8 },
+        desc = "传说中的黄金巨龙",
+    },
+    {
+        id = 26, name = "phoenixfish", displayName = "凤凰鱼", icon = "fish_phoenixfish",
+        zone = "legendary", fishType = "accelerator", rarity = "epic",
+        baseValue = 1600, catchWeight = 20,
+        qualityWeights = { 28, 25, 23, 16, 8 },
+        desc = "浴火重生的传说之鱼",
+    },
+    {
+        id = 27, name = "leviathan", displayName = "利维坦", icon = "fish_leviathan",
+        zone = "legendary", fishType = "amplifier", rarity = "legendary",
+        baseValue = 2000, catchWeight = 15,
+        qualityWeights = { 25, 24, 24, 17, 10 },
+        desc = "海洋深处的终极巨兽",
+    },
+    {
+        id = 28, name = "moonfish", displayName = "月光鱼", icon = "fish_moonfish",
+        zone = "legendary", fishType = "combo", rarity = "legendary",
+        baseValue = 1800, catchWeight = 16,
+        qualityWeights = { 26, 24, 23, 17, 10 },
+        desc = "月光下才会出现的神秘之鱼",
+    },
+    {
+        id = 29, name = "stormturtle", displayName = "风暴龟", icon = "fish_stormturtle",
+        zone = "legendary", fishType = "producer", rarity = "rare",
+        baseValue = 1200, catchWeight = 22,
+        qualityWeights = { 32, 25, 22, 14, 7 },
+        desc = "能引发海上风暴的巨型海龟",
+    },
+    {
+        id = 30, name = "cosmicwhale", displayName = "星辰鲸", icon = "fish_cosmicwhale",
+        zone = "legendary", fishType = "amplifier", rarity = "legendary",
+        baseValue = 2500, catchWeight = 10,
+        qualityWeights = { 22, 23, 25, 18, 12 },
+        desc = "承载星辰的宇宙巨鲸，最稀有的传说",
     },
 }
 
@@ -130,42 +273,187 @@ for _, fish in ipairs(GameConfig.FISH) do
     table.insert(GameConfig.FISH_BY_ZONE[fish.zone], fish)
 end
 
--- ========== 5个寿司配方 ==========
+-- ========== 25个食物配方 (每海域5个) ==========
 GameConfig.SUSHI = {
+    -- ====== 近海 nearshore (id 1-5) ======
     {
-        id = 1, name = "sardine_sushi", displayName = "沙丁鱼寿司", icon = "🍣",
+        id = 1, name = "sardine_sushi", displayName = "沙丁鱼寿司", icon = "sushi",
         zone = "nearshore",
-        ingredients = { {fishId = 1, count = 3} },  -- 小沙丁鱼x3
+        ingredients = { {fishId = 1, count = 3} },
         processTime = 5, basePrice = 60,
         desc = "最基础的寿司",
     },
     {
-        id = 2, name = "clown_roll", displayName = "小丑鱼卷", icon = "🍥",
+        id = 2, name = "clown_roll", displayName = "小丑鱼卷", icon = "sushi_roll",
         zone = "nearshore",
-        ingredients = { {fishId = 2, count = 2}, {fishId = 3, count = 1} },  -- 小丑鱼x2+泡泡鱼x1
+        ingredients = { {fishId = 2, count = 2}, {fishId = 3, count = 1} },
         processTime = 8, basePrice = 120,
         desc = "色彩缤纷的鱼卷",
     },
     {
-        id = 3, name = "coral_nigiri", displayName = "珊瑚鱼握寿司", icon = "🍣",
+        id = 3, name = "coral_nigiri", displayName = "珊瑚鱼握寿司", icon = "sushi",
         zone = "nearshore",
-        ingredients = { {fishId = 4, count = 2}, {fishId = 1, count = 2} },  -- 珊瑚鱼x2+小沙丁鱼x2
+        ingredients = { {fishId = 4, count = 2}, {fishId = 1, count = 2} },
         processTime = 12, basePrice = 180,
         desc = "精致的握寿司",
     },
     {
-        id = 4, name = "flying_sushi", displayName = "飞鱼寿司", icon = "🍱",
+        id = 4, name = "shell_tempura", displayName = "贝壳天妇罗", icon = "sushi",
+        zone = "nearshore",
+        ingredients = { {fishId = 5, count = 2}, {fishId = 3, count = 1} },
+        processTime = 10, basePrice = 150,
+        desc = "外酥里嫩的贝壳天妇罗",
+    },
+    {
+        id = 5, name = "bluefin_sashimi", displayName = "蓝鳍刺身", icon = "bento",
+        zone = "nearshore",
+        ingredients = { {fishId = 6, count = 2}, {fishId = 2, count = 1} },
+        processTime = 15, basePrice = 220,
+        desc = "近海极品刺身拼盘",
+    },
+    -- ====== 外海 offshore (id 6-10) ======
+    {
+        id = 6, name = "flying_sushi", displayName = "飞鱼寿司", icon = "bento",
         zone = "offshore",
-        ingredients = { {fishId = 7, count = 2}, {fishId = 8, count = 1} },  -- 飞鱼x2+银枪鱼x1
+        ingredients = { {fishId = 7, count = 2}, {fishId = 8, count = 1} },
         processTime = 30, basePrice = 700,
         desc = "外海特色寿司",
     },
     {
-        id = 5, name = "gem_roll", displayName = "宝石鱼卷", icon = "🍱",
+        id = 7, name = "gem_roll", displayName = "宝石鱼卷", icon = "bento",
         zone = "offshore",
-        ingredients = { {fishId = 9, count = 1}, {fishId = 8, count = 2} },  -- 宝石鱼x1+银枪鱼x2
+        ingredients = { {fishId = 9, count = 1}, {fishId = 8, count = 2} },
         processTime = 45, basePrice = 1200,
         desc = "闪耀的高级鱼卷",
+    },
+    {
+        id = 8, name = "octopus_takoyaki", displayName = "章鱼小丸子", icon = "sushi",
+        zone = "offshore",
+        ingredients = { {fishId = 10, count = 2}, {fishId = 11, count = 1} },
+        processTime = 35, basePrice = 950,
+        desc = "外酥内嫩的章鱼小丸子",
+    },
+    {
+        id = 9, name = "sword_steak", displayName = "旗鱼排", icon = "bento",
+        zone = "offshore",
+        ingredients = { {fishId = 11, count = 3} },
+        processTime = 25, basePrice = 600,
+        desc = "厚切旗鱼牛排",
+    },
+    {
+        id = 10, name = "seahorse_soup", displayName = "海马养生汤", icon = "sushi",
+        zone = "offshore",
+        ingredients = { {fishId = 12, count = 2}, {fishId = 7, count = 1} },
+        processTime = 40, basePrice = 800,
+        desc = "滋补养生的海马汤",
+    },
+    -- ====== 深海 deepocean (id 11-15) ======
+    {
+        id = 11, name = "angler_hotpot", displayName = "灯笼鱼火锅", icon = "bento",
+        zone = "deepocean",
+        ingredients = { {fishId = 13, count = 2}, {fishId = 14, count = 1} },
+        processTime = 60, basePrice = 2000,
+        desc = "深海风味的鲜美火锅",
+    },
+    {
+        id = 12, name = "jelly_dessert", displayName = "水母果冻", icon = "sushi",
+        zone = "deepocean",
+        ingredients = { {fishId = 14, count = 3} },
+        processTime = 50, basePrice = 1800,
+        desc = "Q弹透明的水母甜品",
+    },
+    {
+        id = 13, name = "viper_skewer", displayName = "蝰蛇鱼串烧", icon = "sushi",
+        zone = "deepocean",
+        ingredients = { {fishId = 15, count = 2}, {fishId = 13, count = 1} },
+        processTime = 55, basePrice = 2200,
+        desc = "炭烤深海鱼串",
+    },
+    {
+        id = 14, name = "nautilus_risotto", displayName = "鹦鹉螺炖饭", icon = "bento",
+        zone = "deepocean",
+        ingredients = { {fishId = 16, count = 1}, {fishId = 18, count = 1} },
+        processTime = 70, basePrice = 2800,
+        desc = "远古风味的浓郁炖饭",
+    },
+    {
+        id = 15, name = "dragon_feast", displayName = "龙鱼盛宴", icon = "bento",
+        zone = "deepocean",
+        ingredients = { {fishId = 17, count = 1}, {fishId = 15, count = 1}, {fishId = 18, count = 1} },
+        processTime = 90, basePrice = 4000,
+        desc = "深海三鲜的终极盛宴",
+    },
+    -- ====== 深渊 abyss (id 16-20) ======
+    {
+        id = 16, name = "abyss_eel_bowl", displayName = "深渊鳗鱼饭", icon = "bento",
+        zone = "abyss",
+        ingredients = { {fishId = 19, count = 2}, {fishId = 23, count = 1} },
+        processTime = 100, basePrice = 6000,
+        desc = "浓汁慢烤的深渊鳗鱼",
+    },
+    {
+        id = 17, name = "phantom_carpaccio", displayName = "幻影鳐薄切", icon = "sushi",
+        zone = "abyss",
+        ingredients = { {fishId = 20, count = 2}, {fishId = 24, count = 1} },
+        processTime = 90, basePrice = 5500,
+        desc = "入口即化的幻影刺身",
+    },
+    {
+        id = 18, name = "crystal_cocktail", displayName = "水晶虾鸡尾酒", icon = "sushi",
+        zone = "abyss",
+        ingredients = { {fishId = 21, count = 2}, {fishId = 20, count = 1} },
+        processTime = 80, basePrice = 5000,
+        desc = "晶莹剔透的深渊开胃菜",
+    },
+    {
+        id = 19, name = "shadow_stew", displayName = "暗影鲸炖菜", icon = "bento",
+        zone = "abyss",
+        ingredients = { {fishId = 22, count = 1}, {fishId = 19, count = 1} },
+        processTime = 120, basePrice = 7500,
+        desc = "需要两天慢炖的巨鲸料理",
+    },
+    {
+        id = 20, name = "void_platter", displayName = "虚空拼盘", icon = "bento",
+        zone = "abyss",
+        ingredients = { {fishId = 23, count = 2}, {fishId = 24, count = 2} },
+        processTime = 110, basePrice = 7000,
+        desc = "深渊甲壳与海蜇的豪华拼盘",
+    },
+    -- ====== 传说之海 legendary (id 21-25) ======
+    {
+        id = 21, name = "golden_sashimi", displayName = "金龙刺身", icon = "bento",
+        zone = "legendary",
+        ingredients = { {fishId = 25, count = 2}, {fishId = 29, count = 1} },
+        processTime = 150, basePrice = 15000,
+        desc = "金光闪闪的极品刺身",
+    },
+    {
+        id = 22, name = "phoenix_grill", displayName = "凤凰烤鱼", icon = "bento",
+        zone = "legendary",
+        ingredients = { {fishId = 26, count = 2}, {fishId = 25, count = 1} },
+        processTime = 160, basePrice = 18000,
+        desc = "浴火烹制的传说料理",
+    },
+    {
+        id = 23, name = "leviathan_soup", displayName = "利维坦浓汤", icon = "bento",
+        zone = "legendary",
+        ingredients = { {fishId = 27, count = 1}, {fishId = 30, count = 1} },
+        processTime = 200, basePrice = 25000,
+        desc = "传说巨兽的终极浓汤",
+    },
+    {
+        id = 24, name = "moonlight_set", displayName = "月光套餐", icon = "bento",
+        zone = "legendary",
+        ingredients = { {fishId = 28, count = 1}, {fishId = 26, count = 1}, {fishId = 29, count = 1} },
+        processTime = 180, basePrice = 22000,
+        desc = "月下三味的梦幻套餐",
+    },
+    {
+        id = 25, name = "cosmic_banquet", displayName = "星辰宴", icon = "bento",
+        zone = "legendary",
+        ingredients = { {fishId = 30, count = 1}, {fishId = 27, count = 1}, {fishId = 28, count = 1} },
+        processTime = 240, basePrice = 35000,
+        desc = "集齐星辰之力的终极宴席",
     },
 }
 
@@ -178,8 +466,19 @@ end
 GameConfig.RECIPE_MAX_LEVEL = 10
 --- 每级售价加成 (level 1 = +0%, level 2 = +15%, level 3 = +30%, ...)
 GameConfig.RECIPE_PRICE_PER_LEVEL = 0.15
---- 升级费用 = baseCost * level^1.4
-GameConfig.RECIPE_UPGRADE_BASE_COST = { 100, 150, 200, 500, 800 }  -- 按 recipeId 索引
+--- 升级费用 = baseCost * level^1.4 (按 recipeId 索引, 共25项)
+GameConfig.RECIPE_UPGRADE_BASE_COST = {
+    -- 近海 (1-5)
+    100, 150, 200, 180, 250,
+    -- 外海 (6-10)
+    500, 800, 700, 450, 600,
+    -- 深海 (11-15)
+    1500, 1200, 1600, 2000, 3000,
+    -- 深渊 (16-20)
+    4500, 4000, 3800, 5500, 5000,
+    -- 传说 (21-25)
+    10000, 12000, 18000, 15000, 25000,
+}
 
 --- 获取菜谱升级金币费用
 function GameConfig.getRecipeUpgradeCost(recipeId, currentLevel)
@@ -199,7 +498,7 @@ function GameConfig.getRecipeUpgradeFish(recipeId, currentLevel)
             fishId = ing.fishId,
             count  = ing.count * (currentLevel + 1),
             displayName = fish and fish.displayName or "???",
-            icon   = fish and fish.icon or "🐟",
+            icon   = fish and fish.icon or "fish_sardine",
         })
     end
     return result
@@ -213,7 +512,7 @@ end
 -- ========== 4种船员类型 ==========
 GameConfig.CREW = {
     {
-        id = 1, type = "fisher", displayName = "钓鱼手", icon = "🎣",
+        id = 1, type = "fisher", displayName = "钓鱼手", icon = "fisher",
         portrait = "image/crew_fisher_20260427080355.png",
         desc = "提升自动捕鱼速度",
         baseBonus = 0.15,       -- 基础: 捕鱼速度+15%
@@ -222,7 +521,7 @@ GameConfig.CREW = {
         upgradeCostScale = 1.5,
     },
     {
-        id = 2, type = "netter", displayName = "捞网手", icon = "🥅",
+        id = 2, type = "netter", displayName = "捞网手", icon = "netter",
         portrait = "image/crew_netter_20260427080343.png",
         desc = "有概率额外捕获一条鱼",
         baseBonus = 0.10,       -- 基础: 10%双倍捕获概率
@@ -231,7 +530,7 @@ GameConfig.CREW = {
         upgradeCostScale = 1.5,
     },
     {
-        id = 3, type = "harvester", displayName = "收获手", icon = "📦",
+        id = 3, type = "harvester", displayName = "收获手", icon = "harvester",
         portrait = "image/crew_harvester_20260427080344.png",
         desc = "提升鱼仓容量",
         baseBonus = 10,         -- 基础: 容量+10
@@ -240,7 +539,7 @@ GameConfig.CREW = {
         upgradeCostScale = 1.5,
     },
     {
-        id = 4, type = "baiter", displayName = "饵料手", icon = "🧪",
+        id = 4, type = "baiter", displayName = "饵料手", icon = "baiter",
         portrait = "image/crew_baiter_20260427080359.png",
         desc = "有概率不消耗饵料",
         baseBonus = 0.10,       -- 基础: 10%不消耗饵料
@@ -271,18 +570,44 @@ GameConfig.BREEDING = {
     },
 }
 
--- 鱼图片映射 (fishName → 图片路径)
+-- 鱼图片映射 (fishName → 图片路径), 缺图用 placeholder
+local FISH_PLACEHOLDER = "image/fish/fish_sardine.png"
 GameConfig.FISH_IMAGE = {
-    sardine    = "image/fish_sardine_20260426161404.png",
-    clownfish  = "image/fish_clownfish_20260426154607.png",
-    bubblefish = "image/fish_bubblefish_20260426161340.png",
-    coralfish  = "image/fish_coralfish_20260426154605.png",
-    shellfish  = "image/fish_shellfish_20260426154603.png",
-    bluefin    = "image/fish_bluefin_20260426155456.png",
-    flyingfish = "image/fish_flyingfish_20260426155458.png",
-    silverfish = "image/fish_silverfish_20260426155454.png",
-    gemfish    = "image/fish_gemfish_20260426155453.png",
-    octopus    = "image/fish_octopus_20260426155724.png",
+    -- 近海 (1-6) — 已有图片
+    sardine       = "image/fish/fish_sardine.png",
+    clownfish     = "image/fish/fish_clownfish.png",
+    bubblefish    = "image/fish/fish_bubblefish.png",
+    coralfish     = "image/fish/fish_coralfish.png",
+    shellfish     = "image/fish/fish_shellfish.png",
+    bluefin       = "image/fish/fish_bluefin.png",
+    -- 外海 (7-12) — 前4条已有图片
+    flyingfish    = "image/fish/fish_flyingfish.png",
+    silverfish    = "image/fish/fish_silverfish.png",
+    gemfish       = "image/fish/fish_gemfish.png",
+    octopus       = "image/fish/fish_octopus.png",
+    swordfish     = FISH_PLACEHOLDER,  -- TODO: 生成旗鱼图片
+    seahorse      = FISH_PLACEHOLDER,  -- TODO: 生成海马图片
+    -- 深海 (13-18)
+    anglerfish    = FISH_PLACEHOLDER,  -- TODO: 生成灯笼鱼图片
+    jellyfish     = FISH_PLACEHOLDER,  -- TODO: 生成水母鱼图片
+    viperfish     = FISH_PLACEHOLDER,  -- TODO: 生成蝰蛇鱼图片
+    nautilus      = FISH_PLACEHOLDER,  -- TODO: 生成鹦鹉螺图片
+    dragonfish    = FISH_PLACEHOLDER,  -- TODO: 生成龙鱼图片
+    glowsquid     = FISH_PLACEHOLDER,  -- TODO: 生成荧光鱿图片
+    -- 深渊 (19-24)
+    abysseel      = FISH_PLACEHOLDER,  -- TODO: 生成深渊鳗图片
+    phantomray    = FISH_PLACEHOLDER,  -- TODO: 生成幻影鳐图片
+    crystalshrimp = FISH_PLACEHOLDER,  -- TODO: 生成水晶虾图片
+    shadowwhale   = FISH_PLACEHOLDER,  -- TODO: 生成暗影鲸图片
+    voidcrab      = FISH_PLACEHOLDER,  -- TODO: 生成虚空蟹图片
+    abyssjelly    = FISH_PLACEHOLDER,  -- TODO: 生成深渊海蜇图片
+    -- 传说 (25-30)
+    goldendragon  = FISH_PLACEHOLDER,  -- TODO: 生成金龙鱼图片
+    phoenixfish   = FISH_PLACEHOLDER,  -- TODO: 生成凤凰鱼图片
+    leviathan     = FISH_PLACEHOLDER,  -- TODO: 生成利维坦图片
+    moonfish      = FISH_PLACEHOLDER,  -- TODO: 生成月光鱼图片
+    stormturtle   = FISH_PLACEHOLDER,  -- TODO: 生成风暴龟图片
+    cosmicwhale   = FISH_PLACEHOLDER,  -- TODO: 生成星辰鲸图片
 }
 
 -- ========== 鱼缸系统 ==========
@@ -433,19 +758,19 @@ end
 -- 鱼饵决定鱼影的尺寸分布: small=仅金币, medium/large=入背包
 GameConfig.BAIT = {
     {
-        id = "normal", displayName = "普通鱼饵", icon = "🪱",
+        id = "normal", displayName = "普通鱼饵", icon = "worm",
         desc = "只能吸引小鱼",
         sizeWeights = { small = 1.0, medium = 0, large = 0 },
         unlockBaitLevel = 1,  -- bait 装备等级 >= 1 即可用(初始)
     },
     {
-        id = "sweet", displayName = "香甜鱼饵", icon = "🍬",
+        id = "sweet", displayName = "香甜鱼饵", icon = "candy_bait",
         desc = "有几率吸引中型鱼",
         sizeWeights = { small = 0.85, medium = 0.15, large = 0 },
         unlockBaitLevel = 3,  -- bait 装备等级 >= 3
     },
     {
-        id = "shiny", displayName = "闪光鱼饵", icon = "✨",
+        id = "shiny", displayName = "闪光鱼饵", icon = "shiny_bait",
         desc = "能吸引中型甚至大型鱼",
         sizeWeights = { small = 0.75, medium = 0.20, large = 0.05 },
         unlockBaitLevel = 5,  -- bait 装备等级 >= 5
@@ -470,17 +795,17 @@ end
 
 -- ========== 研发系统 ==========
 GameConfig.RESEARCH_CATEGORIES = {
-    { id = "fishing",  displayName = "捕鱼", icon = "🎣" },
-    { id = "industry", displayName = "产业", icon = "🍣" },
-    { id = "aquarium", displayName = "鱼缸", icon = "🐠" },
-    { id = "breeding", displayName = "养殖", icon = "🐣" },
+    { id = "fishing",  displayName = "捕鱼", icon = "fisher" },
+    { id = "industry", displayName = "产业", icon = "sushi" },
+    { id = "aquarium", displayName = "鱼缸", icon = "aquarium" },
+    { id = "breeding", displayName = "养殖", icon = "egg" },
 }
 
 GameConfig.RESEARCH = {
     -- ====== 捕鱼 (3项) ======
     {
         key = "fish_density", category = "fishing",
-        displayName = "鱼群密度", icon = "🐟",
+        displayName = "鱼群密度", icon = "fish_sardine",
         desc = "提升常驻鱼影数量",
         maxLevel = 8, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv1=×1.15, Lv8=×2.20
@@ -488,7 +813,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "wave_interval", category = "fishing",
-        displayName = "波次频率", icon = "🌊",
+        displayName = "波次频率", icon = "wave",
         desc = "缩短鱼群波次间隔",
         maxLevel = 6, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = -0.08,  -- 减少, Lv6=×0.52
@@ -497,7 +822,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "hold_capacity", category = "fishing",
-        displayName = "鱼仓扩容", icon = "📦",
+        displayName = "鱼仓扩容", icon = "harvester",
         desc = "增加鱼仓最大容量",
         maxLevel = 8, effectType = "add",
         baseEffect = 0, effectPerLevel = 10,  -- 每级+10容量
@@ -506,7 +831,7 @@ GameConfig.RESEARCH = {
     -- ====== 产业 (3项) ======
     {
         key = "sushi_price", category = "industry",
-        displayName = "寿司溢价", icon = "💰",
+        displayName = "寿司溢价", icon = "coin",
         desc = "提升寿司售价",
         maxLevel = 8, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = 0.10,  -- Lv8=×1.80
@@ -514,7 +839,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "synthesis_speed", category = "industry",
-        displayName = "合成加速", icon = "⚡",
+        displayName = "合成加速", icon = "lightning",
         desc = "加快寿司合成速度",
         maxLevel = 6, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv6=×1.90
@@ -522,7 +847,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "npc_frequency", category = "industry",
-        displayName = "客流量", icon = "🐱",
+        displayName = "客流量", icon = "cat",
         desc = "缩短NPC到来间隔",
         maxLevel = 6, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = -0.08,
@@ -532,7 +857,7 @@ GameConfig.RESEARCH = {
     -- ====== 鱼缸 (2项) ======
     {
         key = "aquarium_income", category = "aquarium",
-        displayName = "鱼缸收益", icon = "💎",
+        displayName = "鱼缸收益", icon = "diamond",
         desc = "提升鱼缸金币产出",
         maxLevel = 8, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = 0.12,  -- Lv8=×1.96
@@ -540,7 +865,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "aquarium_slots", category = "aquarium",
-        displayName = "鱼缸扩建", icon = "🏠",
+        displayName = "鱼缸扩建", icon = "home",
         desc = "增加鱼缸最大槽位",
         maxLevel = 4, effectType = "add",
         baseEffect = 0, effectPerLevel = 2,  -- 每级+2槽
@@ -549,7 +874,7 @@ GameConfig.RESEARCH = {
     -- ====== 养殖 (3项) ======
     {
         key = "breed_speed", category = "breeding",
-        displayName = "繁殖加速", icon = "⏱️",
+        displayName = "繁殖加速", icon = "clock",
         desc = "加快养殖产出速度",
         maxLevel = 6, effectType = "multiply",
         baseEffect = 1.0, effectPerLevel = 0.15,  -- Lv6=×1.90
@@ -557,7 +882,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "breed_slots", category = "breeding",
-        displayName = "养殖扩建", icon = "🏗️",
+        displayName = "养殖扩建", icon = "build",
         desc = "增加养殖最大槽位",
         maxLevel = 4, effectType = "add",
         baseEffect = 0, effectPerLevel = 2,
@@ -565,7 +890,7 @@ GameConfig.RESEARCH = {
     },
     {
         key = "quality_boost", category = "fishing",
-        displayName = "品质提升", icon = "⭐",
+        displayName = "品质提升", icon = "star",
         desc = "捕鱼时高品质概率提升",
         maxLevel = 5, effectType = "add",
         baseEffect = 0, effectPerLevel = 1,  -- 每级+1 (权重偏移值)
@@ -585,18 +910,43 @@ for _, r in ipairs(GameConfig.RESEARCH) do
 end
 
 -- ========== 图鉴/收集系统 ==========
--- 集齐某鱼种全5品质后的永久奖励
+-- 集齐某鱼种全5品质后的永久奖励 (30条鱼)
 GameConfig.CODEX_FISH_REWARDS = {
+    -- 近海 (1-6)
     { fishId = 1,  rewardType = "coinBonus",    value = 0.03, desc = "金币+3%" },
     { fishId = 2,  rewardType = "coinBonus",    value = 0.04, desc = "金币+4%" },
     { fishId = 3,  rewardType = "processSpeed", value = 0.05, desc = "合成速度+5%" },
     { fishId = 4,  rewardType = "sushiPrice",   value = 0.04, desc = "寿司售价+4%" },
     { fishId = 5,  rewardType = "comboBonus",   value = 0.05, desc = "组合加成+5%" },
     { fishId = 6,  rewardType = "coinBonus",    value = 0.05, desc = "金币+5%" },
+    -- 外海 (7-12)
     { fishId = 7,  rewardType = "processSpeed", value = 0.06, desc = "合成速度+6%" },
     { fishId = 8,  rewardType = "sushiPrice",   value = 0.06, desc = "寿司售价+6%" },
     { fishId = 9,  rewardType = "comboBonus",   value = 0.08, desc = "组合加成+8%" },
     { fishId = 10, rewardType = "coinBonus",    value = 0.08, desc = "金币+8%" },
+    { fishId = 11, rewardType = "sushiPrice",   value = 0.05, desc = "寿司售价+5%" },
+    { fishId = 12, rewardType = "processSpeed", value = 0.07, desc = "合成速度+7%" },
+    -- 深海 (13-18)
+    { fishId = 13, rewardType = "coinBonus",    value = 0.10, desc = "金币+10%" },
+    { fishId = 14, rewardType = "processSpeed", value = 0.08, desc = "合成速度+8%" },
+    { fishId = 15, rewardType = "sushiPrice",   value = 0.08, desc = "寿司售价+8%" },
+    { fishId = 16, rewardType = "comboBonus",   value = 0.10, desc = "组合加成+10%" },
+    { fishId = 17, rewardType = "coinBonus",    value = 0.12, desc = "金币+12%" },
+    { fishId = 18, rewardType = "processSpeed", value = 0.10, desc = "合成速度+10%" },
+    -- 深渊 (19-24)
+    { fishId = 19, rewardType = "sushiPrice",   value = 0.10, desc = "寿司售价+10%" },
+    { fishId = 20, rewardType = "processSpeed", value = 0.12, desc = "合成速度+12%" },
+    { fishId = 21, rewardType = "comboBonus",   value = 0.12, desc = "组合加成+12%" },
+    { fishId = 22, rewardType = "coinBonus",    value = 0.15, desc = "金币+15%" },
+    { fishId = 23, rewardType = "sushiPrice",   value = 0.08, desc = "寿司售价+8%" },
+    { fishId = 24, rewardType = "processSpeed", value = 0.10, desc = "合成速度+10%" },
+    -- 传说 (25-30)
+    { fishId = 25, rewardType = "coinBonus",    value = 0.18, desc = "金币+18%" },
+    { fishId = 26, rewardType = "processSpeed", value = 0.15, desc = "合成速度+15%" },
+    { fishId = 27, rewardType = "comboBonus",   value = 0.18, desc = "组合加成+18%" },
+    { fishId = 28, rewardType = "allBonus",     value = 0.10, desc = "全属性+10%" },
+    { fishId = 29, rewardType = "sushiPrice",   value = 0.15, desc = "寿司售价+15%" },
+    { fishId = 30, rewardType = "allBonus",     value = 0.15, desc = "全属性+15%" },
 }
 -- 快速查找
 GameConfig.CODEX_FISH_REWARD_BY_ID = {}

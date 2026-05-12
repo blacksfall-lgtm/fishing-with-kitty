@@ -173,14 +173,14 @@ function ResearchScene.renderHUD(nvg, x, y, w, h)
     nvgFontSize(nvg, 17)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "🔬 研发中心")
+    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "研发中心")
 
     -- 金币
     nvgFontSize(nvg, 12)
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
     nvgText(nvg, x + w - 10, btnY + btnH * 0.5,
-        "💰 " .. FormatUtils.formatNumber(GameState.coins))
+        FormatUtils.formatNumber(GameState.coins) .. " 金币")
 end
 
 -- ============================================================================
@@ -458,7 +458,7 @@ function ResearchScene.renderCard(nvg, cx, cy, cw, ch, research)
             nvgFillColor(nvg, nvgRGBA(130, 140, 160, 180))
         end
         nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5,
-            "💰" .. FormatUtils.formatNumber(cost))
+            FormatUtils.formatNumber(cost) .. " 金币")
 
         -- 点击区域
         table.insert(clickRects_, {

@@ -92,7 +92,7 @@ function DropSystem.generateCatchResult(opts)
         fishId      = chosenFish.id,
         fishName    = chosenFish.name,
         displayName = chosenFish.displayName,
-        icon        = chosenFish.icon or "🐟",
+        icon        = chosenFish.icon or "fish_sardine",
         zone        = chosenFish.zone,
         fishType    = chosenFish.fishType,
         qualityId   = qualityId,
@@ -114,14 +114,9 @@ function DropSystem.generateBossDrop(opts)
     local zone = opts.zone or "nearshore"
     local bossVariant = opts.bossVariant or 1
 
-    -- Boss variant 1~4 → 鱼种 id 7~10 (外海鱼)
-    local fishId = math.min(bossVariant + 6, 10)
-    local chosenFish = GameConfig.FISH_BY_ID[fishId]
-    if not chosenFish then
-        -- fallback: 当前海域随机
-        local zoneFish = GameConfig.FISH_BY_ZONE[zone] or GameConfig.FISH_BY_ZONE["nearshore"]
-        chosenFish = zoneFish[math.random(1, #zoneFish)]
-    end
+    -- 按当前海域随机鱼种（Boss掉落当前海域的鱼）
+    local zoneFish = GameConfig.FISH_BY_ZONE[zone] or GameConfig.FISH_BY_ZONE["nearshore"]
+    local chosenFish = zoneFish[math.random(1, #zoneFish)]
 
     -- 品质 roll (使用鱼种自身权重)
     local qWeights = chosenFish.qualityWeights or GameConfig.DEFAULT_QUALITY_WEIGHTS
@@ -139,7 +134,7 @@ function DropSystem.generateBossDrop(opts)
         fishId      = chosenFish.id,
         fishName    = chosenFish.name,
         displayName = chosenFish.displayName,
-        icon        = chosenFish.icon or "🐟",
+        icon        = chosenFish.icon or "fish_sardine",
         zone        = chosenFish.zone,
         fishType    = chosenFish.fishType,
         qualityId   = qualityId,
@@ -185,7 +180,7 @@ function DropSystem.generateRareFishDrop(opts)
         fishId      = chosenFish.id,
         fishName    = chosenFish.name,
         displayName = chosenFish.displayName,
-        icon        = chosenFish.icon or "🐟",
+        icon        = chosenFish.icon or "fish_sardine",
         zone        = chosenFish.zone,
         fishType    = chosenFish.fishType,
         qualityId   = qualityId,

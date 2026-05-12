@@ -313,7 +313,7 @@ function WaterScene.init(nvg)
     end
 
     -- 鱼影 atlas (4列 × 4行: 4种鱼 × 每种4帧游泳动画, 鱼头朝左)
-    imgFishSheet_ = nvgCreateImage(nvg, "image/fish_swim_atlas_20260426131513.png", 0)
+    imgFishSheet_ = nvgCreateImage(nvg, "image/fish/fish_swim_atlas.png", 0)
     if imgFishSheet_ and imgFishSheet_ > 0 then
         fishSheetW_, fishSheetH_ = nvgImageSize(nvg, imgFishSheet_)
         print("[WaterScene] fish atlas: " .. fishSheetW_ .. "x" .. fishSheetH_)
@@ -457,16 +457,16 @@ function WaterScene.init(nvg)
 
     -- 加载10种鱼的单独图片 (捕获飞行动画用)
     local fishImageFiles = {
-        sardine   = "image/fish_sardine_20260426161404.png",
-        clownfish = "image/fish_clownfish_20260426154607.png",
-        bubblefish= "image/fish_bubblefish_20260426161340.png",
-        coralfish = "image/fish_coralfish_20260426154605.png",
-        shellfish = "image/fish_shellfish_20260426154603.png",
-        bluefin   = "image/fish_bluefin_20260426155456.png",
-        flyingfish= "image/fish_flyingfish_20260426155458.png",
-        silverfish= "image/fish_silverfish_20260426155454.png",
-        gemfish   = "image/fish_gemfish_20260426155453.png",
-        octopus   = "image/fish_octopus_20260426155724.png",
+        sardine   = "image/fish/fish_sardine.png",
+        clownfish = "image/fish/fish_clownfish.png",
+        bubblefish= "image/fish/fish_bubblefish.png",
+        coralfish = "image/fish/fish_coralfish.png",
+        shellfish = "image/fish/fish_shellfish.png",
+        bluefin   = "image/fish/fish_bluefin.png",
+        flyingfish= "image/fish/fish_flyingfish.png",
+        silverfish= "image/fish/fish_silverfish.png",
+        gemfish   = "image/fish/fish_gemfish.png",
+        octopus   = "image/fish/fish_octopus.png",
     }
     for name, path in pairs(fishImageFiles) do
         local img = nvgCreateImage(nvg, path, 0)
@@ -1917,7 +1917,7 @@ function WaterScene.renderReturnBtn(nvg, x, y, w, h)
         nvgFontSize(nvg, 18)
         nvgFillColor(nvg, nvgRGBA(80, 80, 100, 220))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgText(nvg, cx, iconY, "⚓")
+        nvgText(nvg, cx, iconY, "锚")
     end
 
     nvgFontFace(nvg, "sans")
@@ -3456,7 +3456,7 @@ function WaterScene.renderBaitBtn(nvg, x, y, w, h)
 
     -- 当前鱼饵图标
     local baitCfg = GameConfig.BAIT_BY_ID[GameState.currentBait or "normal"]
-    local icon = baitCfg and baitCfg.icon or "🪱"
+    local icon = baitCfg and baitCfg.icon or "worm"
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 22)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
@@ -3661,7 +3661,7 @@ function WaterScene.renderNewFishPopup(nvg, x, y, w, h)
     nvgText(nvg, toastX + toastW * 0.5, toastY + 6, "★ 新鱼种发现！")
 
     -- 鱼名 + 图标
-    local fishIcon = data.icon or "🐟"
+    local fishIcon = data.icon or "fish_sardine"
     local fishName = data.displayName or "未知"
     local qualityName = ""
     if data.qualityId and GameConfig.QUALITY[data.qualityId] then

@@ -57,7 +57,7 @@ function IndustryScreen.build()
                         children = {
                             -- 标题
                             UI.Label {
-                                text = "🍣 寿司加工",
+                                text = "寿司加工",
                                 fontSize = 18,
                                 fontWeight = "bold",
                                 fontColor = { 255, 220, 150, 255 },
@@ -122,7 +122,7 @@ function IndustryScreen.refreshSlots()
                 borderColor = { 60, 60, 80, 150 },
                 children = {
                     UI.Label {
-                        text = "🔒 解锁 (" .. FormatUtils.formatNumber(cost) .. " 金币)",
+                        text = "解锁 (" .. FormatUtils.formatNumber(cost) .. " 金币)",
                         fontSize = 12,
                         fontColor = { 120, 120, 140, 255 },
                     },
@@ -241,7 +241,7 @@ function IndustryScreen.refreshRecipes()
                             fontColor = { 220, 230, 255, 255 },
                         },
                         UI.Label {
-                            text = "💰" .. FormatUtils.formatNumber(sellPrice),
+                            text = FormatUtils.formatNumber(sellPrice) .. " 金币",
                             fontSize = 12,
                             fontColor = { 255, 215, 0, 230 },
                         },
@@ -256,7 +256,7 @@ function IndustryScreen.refreshRecipes()
                 },
                 -- 加工按钮
                 UI.Button {
-                    text = "加工 ⏱" .. recipe.processTime .. "s",
+                    text = "加工 " .. recipe.processTime .. "s",
                     fontSize = 11,
                     height = 30,
                     disabled = not hasIngredients,
