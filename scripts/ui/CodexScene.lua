@@ -8,6 +8,8 @@ local CodexSystem = require("systems.CodexSystem")
 local AffixConfig = require("config.AffixConfig")
 local WaterRenderer = require("ui.WaterRenderer")
 local FormatUtils   = require("utils.FormatUtils")
+local UICore        = require("ui.UICore")
+local IconManager   = require("ui.IconManager")
 
 local CodexScene = {}
 
@@ -139,19 +141,36 @@ function CodexScene.render(nvg, x, y, w, h)
 
     -- 5) Toast
     if toastTimer_ > 0 then
-        local alpha = math.min(1, toastTimer_ * 2) * 220
+        local sc = w / 390
+        sc = math.max(0.7, math.min(1.5, sc))
+        local alpha = math.min(1, toastTimer_ * 2)
+        local tx = x + w * 0.5
+        local ty = y + h * 0.42
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 16)
+        nvgFontSize(nvg, math.floor(15 * sc))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         local tw = nvgTextBounds(nvg, 0, 0, toastMsg_)
-        local tx = x + w * 0.5
-        local ty = y + h * 0.4
+        local pw = tw + math.floor(40 * sc)
+        local ph = math.floor(38 * sc)
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, alpha)
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx - tw * 0.5 - 16, ty - 14, tw + 32, 28, 14)
-        nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(alpha * 0.7)))
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgFillColor(nvg, nvgRGBA(8, 38, 82, 220))
         nvgFill(nvg)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, math.floor(alpha)))
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 180))
+        nvgStrokeWidth(nvg, 1.5)
+        nvgStroke(nvg)
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            nvgText(nvg, tx + math.cos(a) * 1.5, ty + math.sin(a) * 1.5, toastMsg_)
+        end
+        nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
         nvgText(nvg, tx, ty, toastMsg_)
+        nvgRestore(nvg)
     end
 end
 
@@ -160,47 +179,83 @@ end
 -- ============================================================================
 
 function CodexScene.renderHUD(nvg, x, y, w, h)
-    -- 半透明顶栏背景
+    local sc = w / 390
+    sc = math.max(0.7, math.min(1.5, sc))
+    local hudH = 46
+    local midY = y + hudH * 0.5
+
+    -- HUD 渐变背景
+    local bgPaint = nvgLinearGradient(nvg, x, y, x, y + hudH,
+        nvgRGBA(10, 50, 105, 235), nvgRGBA(6, 36, 80, 240))
     nvgBeginPath(nvg)
-    nvgRect(nvg, x, y, w, 44)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 100))
+    nvgRect(nvg, x, y, w, hudH)
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
+    -- 底部高光线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, x, y + hudH)
+    nvgLineTo(nvg, x + w, y + hudH)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 70))
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
 
     -- 返回按钮
-    local btnW = 56
-    local btnH = 26
-    local btnX = x + 8
-    local btnY = y + 9
-
+    local btnW = math.floor(64 * sc)
+    local btnH = math.floor(30 * sc)
+    local btnX = x + math.floor(10 * sc)
+    local btnY = midY - btnH * 0.5
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 8)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgFillColor(nvg, nvgRGBA(20, 80, 160, 200))
     nvgFill(nvg)
-
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 160))
+    nvgStrokeWidth(nvg, 1.5)
+    nvgStroke(nvg)
     nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
+    nvgFontSize(nvg, math.floor(12 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "← 返回")
+    local bCX = btnX + btnW * 0.5
+    local bCY = btnY + btnH * 0.5
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, bCX + math.cos(a) * 1.5, bCY + math.sin(a) * 1.5, "← 返回")
+    end
+    nvgFillColor(nvg, nvgRGBA(200, 235, 255, 240))
+    nvgText(nvg, bCX, bCY, "← 返回")
 
     table.insert(clickRects_, {
         x = btnX, y = btnY, w = btnW, h = btnH,
         action = "go_back",
     })
 
-    -- 标题
-    nvgFontSize(nvg, 17)
+    -- 标题（8方向描边）
+    nvgFontSize(nvg, math.floor(17 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "图鉴")
+    local titleX = x + w * 0.5
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 220))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, titleX + math.cos(a) * 2, midY + math.sin(a) * 2, "图鉴")
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
+    nvgText(nvg, titleX, midY, "图鉴")
 
-    -- 总进度
+    -- 总进度（右对齐，小字描边）
     local fc, ft, ac, at = CodexSystem.getOverallProgress()
     local progressStr = string.format("鱼种 %d/%d  词条 %d/%d", fc, ft, ac, at)
-    nvgFontSize(nvg, 11)
+    local progX = x + w - math.floor(10 * sc)
+    nvgFontSize(nvg, math.floor(10 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(180, 220, 255, 200))
-    nvgText(nvg, x + w - 10, btnY + btnH * 0.5, progressStr)
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, progX + math.cos(a) * 1.5, midY + math.sin(a) * 1.5, progressStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(160, 220, 255, 210))
+    nvgText(nvg, progX, midY, progressStr)
 end
 
 -- ============================================================================
@@ -240,16 +295,23 @@ function CodexScene.renderTabBar(nvg, x, y, w, h)
             nvgFill(nvg)
         end
 
-        -- 标签文字
+        -- 标签文字（6方向描边）
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 13)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        if isSelected then
-            nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
-        else
-            nvgFillColor(nvg, nvgRGBA(180, 200, 220, 180))
+        local tabCX = tx + tabW * 0.5
+        local tabCY = ty + th * 0.5
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+        for si = 0, 5 do
+            local a = si * math.pi / 3
+            nvgText(nvg, tabCX + math.cos(a) * 1.5, tabCY + math.sin(a) * 1.5, tab.label)
         end
-        nvgText(nvg, tx + tabW * 0.5, ty + th * 0.45, tab.label)
+        if isSelected then
+            nvgFillColor(nvg, nvgRGBA(235, 250, 255, 255))
+        else
+            nvgFillColor(nvg, nvgRGBA(160, 200, 230, 200))
+        end
+        nvgText(nvg, tabCX, tabCY, tab.label)
 
         table.insert(clickRects_, {
             x = tx, y = ty, w = tabW, h = th,
@@ -345,23 +407,25 @@ function CodexScene.renderFishCard(nvg, cx, cy, cw, ch, fish)
     end
     nvgFill(nvg)
 
-    -- 鱼图标 emoji
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 22)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 230))
-    nvgText(nvg, iconX + 16, iconY + 16, fish.icon)
+    -- 鱼图标
+    IconManager.drawCentered(nvg, fish.icon, iconX + 16, iconY + 16, 28)
 
-    -- 鱼名称
+    -- 鱼名称（6方向描边）
     local nameX = iconX + 40
     nvgFontSize(nvg, 14)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    if isComplete then
-        nvgFillColor(nvg, nvgRGBA(100, 230, 140, 240))
-    else
-        nvgFillColor(nvg, nvgRGBA(220, 235, 255, 230))
+    local nameDrawY = cy + 10
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, nameX + math.cos(a) * 1.5, nameDrawY + math.sin(a) * 1.5, fish.displayName)
     end
-    nvgText(nvg, nameX, cy + 10, fish.displayName)
+    if isComplete then
+        nvgFillColor(nvg, nvgRGBA(100, 235, 145, 255))
+    else
+        nvgFillColor(nvg, nvgRGBA(220, 238, 255, 240))
+    end
+    nvgText(nvg, nameX, nameDrawY, fish.displayName)
 
     -- 进度标签
     nvgFontSize(nvg, 10)

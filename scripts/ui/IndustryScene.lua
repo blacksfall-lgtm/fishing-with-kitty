@@ -11,6 +11,8 @@ local GameState       = require("state.GameState")
 local IndustrySystem  = require("systems.IndustrySystem")
 local EconomySystem   = require("systems.EconomySystem")
 local FormatUtils     = require("utils.FormatUtils")
+local UICore          = require("ui.UICore")
+local IconManager     = require("ui.IconManager")
 
 local IndustryScene = {}
 
@@ -107,6 +109,13 @@ local BAIT_LIST = {
 -- Toast 提示
 local toastMsg_    = nil
 local toastTimer_  = 0
+
+-- 升级弹窗缩放动画进度 0→1
+local upgradePopupT_ = 0
+-- 菜单面板缩放动画进度 0→1
+local menuPanelT_ = 0
+-- 出海面板缩放动画进度 0→1
+local goFishingPanelT_ = 0
 
 -- 菜单道具浮动按钮动画
 local menuBtnFloatTime_ = 0
@@ -298,6 +307,25 @@ function IndustryScene.update(dt)
     end
     -- 菜单道具浮动按钮动画
     menuBtnFloatTime_ = menuBtnFloatTime_ + dt
+    -- 升级弹窗缩放动画
+    local POPUP_SPEED = 1.0 / 0.25
+    if upgradePopup_.open then
+        upgradePopupT_ = math.min(1.0, upgradePopupT_ + dt * POPUP_SPEED)
+    else
+        upgradePopupT_ = 0
+    end
+    -- 菜单面板缩放动画
+    if menuOpen_ then
+        menuPanelT_ = math.min(1.0, menuPanelT_ + dt * POPUP_SPEED)
+    else
+        menuPanelT_ = 0
+    end
+    -- 出海面板缩放动画
+    if goFishingOpen_ then
+        goFishingPanelT_ = math.min(1.0, goFishingPanelT_ + dt * POPUP_SPEED)
+    else
+        goFishingPanelT_ = 0
+    end
 end
 
 function IndustryScene.showToast(msg)
@@ -733,46 +761,29 @@ function IndustryScene.renderCurrencyBar(nvg, x, y, w)
 end
 
 function IndustryScene.drawCurrBar(nvg, bx, by, bw, bh, imgIcon, text, showPlus)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, bx, by, bw, bh, 5)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
-    nvgFill(nvg)
+    local r = bh * 0.38
+    UICore.fillRRectGrad(nvg, bx, by, bw, bh, r, {8, 40, 90}, 210, {5, 25, 65}, 230)
+    UICore.strokeRRect(nvg, bx, by, bw, bh, r, UICore.C_GEM, 1.2, 120)
 
-    if imgCurrBg_ and imgCurrBg_ > 0 then
-        local pat = nvgImagePattern(nvg, bx, by, bw, bh, 0, imgCurrBg_, 0.85)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, bx, by, bw, bh, 5)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
-    end
-
-    local iconSize = bh * 0.75
+    local iconSize = bh * 0.72
     local iconY = by + (bh - iconSize) * 0.5
-    local iconX = bx + 3
+    local iconX = bx + 4
     if imgIcon and imgIcon > 0 then
-        local pat = nvgImagePattern(nvg, iconX, iconY, iconSize, iconSize, 0, imgIcon, 1.0)
-        nvgBeginPath(nvg)
-        nvgRect(nvg, iconX, iconY, iconSize, iconSize)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
+        UICore.drawImageTL(nvg, imgIcon, iconX, iconY, iconSize, iconSize, 1.0)
     end
 
     local textX = iconX + iconSize + 4
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, bh * 0.48)
-    nvgFillColor(nvg, nvgRGBA(30, 30, 30, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, textX, by + bh * 0.5, text)
+    local cx = showPlus and (textX + (bx + bw - 18 - textX) * 0.5)
+               or (textX + (bx + bw - textX) * 0.5)
+    UICore.strokeText(nvg, text, cx, by + bh * 0.5,
+        bh * 0.48, UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     if showPlus and imgPlus_ and imgPlus_ > 0 then
-        local plusSize = bh * 0.6
+        local plusSize = bh * 0.55
         local plusX = bx + bw - plusSize - 2
         local plusY = by + (bh - plusSize) * 0.5
-        local pat = nvgImagePattern(nvg, plusX, plusY, plusSize, plusSize, 0, imgPlus_, 1.0)
-        nvgBeginPath(nvg)
-        nvgRect(nvg, plusX, plusY, plusSize, plusSize)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
+        UICore.drawImageTL(nvg, imgPlus_, plusX, plusY, plusSize, plusSize, 0.9)
     end
 end
 
@@ -786,21 +797,19 @@ function IndustryScene.renderFishStorage(nvg)
     local bw = dockDrawW_ * 0.28
     local bh = 24
 
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, bx, by, bw, bh, 4)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
-    nvgFill(nvg)
+    UICore.fillRRectGrad(nvg, bx, by, bw, bh, 5,
+        {8, 35, 80}, 200, {5, 22, 55}, 218)
+    UICore.strokeRRect(nvg, bx, by, bw, bh, 5, UICore.C_GEM, 1.0, 90)
 
     local totalFish = 0
     for _, count in pairs(GameState.fishInventory) do
         totalFish = totalFish + count
     end
 
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(255, 240, 200, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, bx + bw * 0.5, by + bh * 0.5, "鱼仓 " .. totalFish .. " 条")
+    UICore.strokeText(nvg, "🐟 鱼仓 " .. totalFish .. " 条",
+        bx + bw * 0.5, by + bh * 0.5, 12,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 end
 
 -- ============================================================================
@@ -1043,10 +1052,8 @@ function IndustryScene.renderFoodBar(nvg)
     for _, recipe in ipairs(GameConfig.SUSHI) do
         local count = GameState:getFoodCount(recipe.id)
         if count > 0 then
-            nvgFontSize(nvg, 14)
-            nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
-            nvgText(nvg, cx, cy, recipe.icon)
-            cx = cx + 18
+            IconManager.drawCentered(nvg, recipe.icon, cx + 9, cy, 18)
+            cx = cx + 20
 
             nvgFontSize(nvg, 11)
             nvgFillColor(nvg, nvgRGBA(255, 230, 160, 230))
@@ -1235,15 +1242,15 @@ function IndustryScene.renderChoosingBubble(nvg, cx, cy, catR, s)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     if s.choosingPhase == "wondering" then
+        nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, bubbleR * 1.4)
+        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         nvgFillColor(nvg, nvgRGBA(120, 100, 80, 200))
         nvgText(nvg, bubbleX, bubbleY, "?")
     elseif s.choosingPhase == "decided" then
         local recipe = GameConfig.SUSHI_BY_ID[s.wantRecipeId]
         if recipe then
-            nvgFontSize(nvg, bubbleR * 1.2)
-            nvgFillColor(nvg, nvgRGBA(60, 50, 40, 240))
-            nvgText(nvg, bubbleX, bubbleY, recipe.icon)
+            IconManager.drawCentered(nvg, recipe.icon, bubbleX, bubbleY, bubbleR * 1.5)
         end
     end
 end
@@ -1262,11 +1269,7 @@ function IndustryScene.renderEatingOverlay(nvg, cx, cy, catR, s)
     -- 食物图标 (猫咪下方)
     local recipe = GameConfig.SUSHI_BY_ID[s.wantRecipeId]
     if recipe then
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, catR * 0.8)
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-        nvgText(nvg, cx, cy + catR * 1.3, recipe.icon)
+        IconManager.drawCentered(nvg, recipe.icon, cx, cy + catR * 1.3, catR * 0.9)
     end
 end
 
@@ -1295,15 +1298,13 @@ function IndustryScene.renderNoFoodOverlay(nvg, cx, cy, catR, s)
     nvgFill(nvg)
 
     -- 食物图标
-    nvgFontFace(nvg, "sans")
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     local recipe = GameConfig.SUSHI_BY_ID[s.wantRecipeId]
     if recipe then
-        nvgFontSize(nvg, bubbleR * 1.2)
-        nvgFillColor(nvg, nvgRGBA(60, 50, 40, 240))
-        nvgText(nvg, bubbleX, bubbleY, recipe.icon)
+        IconManager.drawCentered(nvg, recipe.icon, bubbleX, bubbleY, bubbleR * 1.5)
     else
+        nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, bubbleR * 1.4)
+        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         nvgFillColor(nvg, nvgRGBA(255, 80, 60, 220))
         nvgText(nvg, bubbleX, bubbleY, "!")
     end
@@ -1550,19 +1551,12 @@ function IndustryScene.renderGoFishingBtn(nvg, x, y, w, h)
     for i, btn in ipairs(buttons) do
         local btnX = startX + (i - 1) * (btnSize + gap)
 
-        -- 1) 底框贴图 (button_square_depth_line.png, 1:1 不拉伸)
-        if imgBtnSquare_ and imgBtnSquare_ > 0 then
-            local pat = nvgImagePattern(nvg, btnX, btnY, btnSize, btnSize, 0, imgBtnSquare_, 0.92)
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, btnX, btnY, btnSize, btnSize, 5)
-            nvgFillPaint(nvg, pat)
-            nvgFill(nvg)
-        else
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, btnX, btnY, btnSize, btnSize, 5)
-            nvgFillColor(nvg, nvgRGBA(220, 220, 230, 200))
-            nvgFill(nvg)
-        end
+        -- 1) 深海蓝渐变底框
+        local btnR = 12
+        UICore.fillRRectGrad(nvg, btnX, btnY, btnSize, btnSize, btnR,
+            {10, 50, 110}, 220, {6, 30, 80}, 240)
+        UICore.strokeRRect(nvg, btnX, btnY, btnSize, btnSize, btnR,
+            UICore.C_GEM, 1.5, 150)
 
         -- 2) 图标 + 文字居中
         local iconSize = 22
@@ -1575,24 +1569,19 @@ function IndustryScene.renderGoFishingBtn(nvg, x, y, w, h)
         local iconX = cx - iconSize * 0.5
         local iconY = startY
         if btn.img and btn.img > 0 then
-            local pat = nvgImagePattern(nvg, iconX, iconY, iconSize, iconSize, 0, btn.img, 1.0)
-            nvgBeginPath(nvg)
-            nvgRect(nvg, iconX, iconY, iconSize, iconSize)
-            nvgFillPaint(nvg, pat)
-            nvgFill(nvg)
+            UICore.drawImageTL(nvg, btn.img, iconX, iconY, iconSize, iconSize, 1.0)
         else
             nvgFontFace(nvg, "sans")
             nvgFontSize(nvg, 18)
-            nvgFillColor(nvg, nvgRGBA(80, 80, 100, 220))
+            nvgFillColor(nvg, nvgRGBA(UICore.C_TITLE[1], UICore.C_TITLE[2], UICore.C_TITLE[3], 220))
             nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
             nvgText(nvg, cx, iconY, btn.fallback)
         end
 
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 12)
-        nvgFillColor(nvg, nvgRGBA(60, 60, 80, 220))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgText(nvg, cx, iconY + iconSize + igap, btn.label)
+        UICore.strokeText(nvg, btn.label,
+            cx, iconY + iconSize + igap + textH * 0.5, textH,
+            UICore.C_GEM, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
         table.insert(clickRects_, {
             x = btnX, y = btnY, w = btnSize, h = btnSize,
@@ -1690,62 +1679,55 @@ end
 -- ============================================================================
 
 function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
+    -- ===== 动画进度 =====
+    local t = UICore.easeOutCubic(goFishingPanelT_)
+    local maskAlpha = math.floor(t * 160)
+
     -- 半透明遮罩
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
+    nvgFillColor(nvg, nvgRGBA(0, 5, 20, maskAlpha))
     nvgFill(nvg)
 
-    -- 面板尺寸
-    local panelW = math.min(260, w * 0.70)
-    local panelH = math.min(420, h * 0.78)
-    local px = x + (w - panelW) * 0.5
-    local py = y + (h - panelH) * 0.5
-
-    -- 九宫格底框
-    if imgPanelBg_ and imgPanelBg_ > 0 then
-        drawNineSlice(nvg, imgPanelBg_, px, py, panelW, panelH, 16, 0.95)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, px, py, panelW, panelH, 10)
-        nvgFillColor(nvg, nvgRGBA(240, 235, 225, 245))
-        nvgFill(nvg)
+    if t <= 0 then
+        table.insert(clickRects_, { x = x, y = y, w = w, h = h, action = "close_go_fishing" })
+        return
     end
 
-    -- NOTE: close_go_fishing backdrop 移至函数末尾注册,
-    -- 确保面板内按钮在 clickRects_ 中排在 backdrop 之前,
-    -- 这样 for 循环优先匹配面板按钮而非全屏关闭区域.
+    -- 面板尺寸
+    local panelW = math.min(260, w * 0.72)
+    local panelH = math.min(430, h * 0.80)
+    local panelCX = x + w * 0.5
+    local panelCY = y + h * 0.5
 
-    local contentX = px + 14
-    local contentW = panelW - 28
-    local curY = py + 12
+    -- 缩放动画变换
+    local scale = 0.85 + 0.15 * t
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, t)
+    nvgTranslate(nvg, panelCX, panelCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -panelW * 0.5, -panelH * 0.5)
 
-    -- ── 标题 ──
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 17)
-    nvgFillColor(nvg, nvgRGBA(60, 50, 40, 255))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, px + panelW * 0.5, curY, "出海准备")
-    curY = curY + 26
+    local px, py = 0, 0
+    local pad = 12
 
-    -- ── 分割线 ──
-    nvgBeginPath(nvg)
-    nvgMoveTo(nvg, contentX, curY)
-    nvgLineTo(nvg, contentX + contentW, curY)
-    nvgStrokeColor(nvg, nvgRGBA(180, 170, 150, 100))
-    nvgStrokeWidth(nvg, 1)
-    nvgStroke(nvg)
-    curY = curY + 8
+    -- ===== 深海蓝面板背景 =====
+    UICore.drawPanel(nvg, px, py, panelW, panelH, 14)
+    local titleBarH = UICore.drawPanelTitle(nvg, px, py, panelW, "⛵ 出海准备")
 
-    -- ── 海域选择 ──
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(100, 90, 70, 200))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgText(nvg, contentX, curY, "选择海域")
-    curY = curY + 16
+    local contentX = px + pad
+    local contentW = panelW - pad * 2
+    local curY = py + titleBarH + 8
 
-    -- 5 海域：每行排列，小标签
-    local zoneItemH = 28
+    -- ── 海域选择小节标题 ──
+    UICore.strokeTextA(nvg, "选择海域",
+        contentX, curY + 6, 11,
+        UICore.C_GEM, 200, UICore.C_STROKE, 1.2,
+        NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+    curY = curY + 20
+
+    -- ── 海域列表 ──
+    local zoneItemH = 30
     local zoneGap = 4
     for i, zone in ipairs(ZONE_LIST) do
         local zy = curY + (i - 1) * (zoneItemH + zoneGap)
@@ -1753,240 +1735,264 @@ function IndustryScene.renderGoFishingPanel(nvg, x, y, w, h)
         local unlocked = GameState.unlockedZones[zone.key]
         local cost = EconomySystem.getZoneUnlockCost(zone.key)
 
-        -- 背景
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, contentX, zy, contentW, zoneItemH, 6)
+        -- 行背景
         if selected and unlocked then
-            nvgFillColor(nvg, nvgRGBA(70, 140, 200, 55))
+            UICore.fillRRectGrad(nvg, contentX, zy, contentW, zoneItemH, 6,
+                {30, 90, 170}, 180, {20, 65, 130}, 200)
+            UICore.strokeRRect(nvg, contentX, zy, contentW, zoneItemH, 6,
+                UICore.C_GEM, 1.5, 200)
         elseif unlocked then
-            nvgFillColor(nvg, nvgRGBA(200, 195, 185, 35))
+            UICore.fillRRectGrad(nvg, contentX, zy, contentW, zoneItemH, 6,
+                {18, 45, 95}, 140, {12, 30, 70}, 160)
+            UICore.strokeRRect(nvg, contentX, zy, contentW, zoneItemH, 6,
+                {40, 80, 140}, 1.0, 80)
         else
-            nvgFillColor(nvg, nvgRGBA(160, 155, 145, 25))
-        end
-        nvgFill(nvg)
-
-        -- 选中边框
-        if selected and unlocked then
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, contentX, zy, contentW, zoneItemH, 6)
-            nvgStrokeColor(nvg, nvgRGBA(70, 140, 200, 180))
-            nvgStrokeWidth(nvg, 1.5)
-            nvgStroke(nvg)
+            UICore.fillRRectGrad(nvg, contentX, zy, contentW, zoneItemH, 6,
+                {10, 20, 45}, 100, {6, 12, 30}, 120)
+            UICore.strokeRRect(nvg, contentX, zy, contentW, zoneItemH, 6,
+                {25, 45, 80}, 0.8, 60)
         end
 
-        -- 左侧: 图标 + 名称
-        nvgFontSize(nvg, 13)
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, unlocked and nvgRGBA(50, 45, 35, 255) or nvgRGBA(140, 135, 125, 200))
-        nvgText(nvg, contentX + 8, zy + zoneItemH * 0.5, zone.icon .. " " .. zone.name)
+        -- 左侧: 海域图标 + 名称
+        local iconSz = 20
+        local iconX = contentX + 6
+        local iconY = zy + (zoneItemH - iconSz) * 0.5
+        IconManager.draw(nvg, zone.icon, iconX, iconY, iconSz, iconSz,
+            unlocked and 1.0 or 0.4)
 
-        -- 右侧: 描述 或 锁定+费用
-        nvgFontSize(nvg, 10)
-        nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
+        local nameColor = selected and UICore.C_TITLE
+            or (unlocked and {200, 220, 255} or {80, 110, 160})
+        UICore.strokeText(nvg, zone.name,
+            iconX + iconSz + 6, zy + zoneItemH * 0.5, 12,
+            nameColor, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+
+        -- 右侧: 描述 / 费用
         if unlocked then
-            nvgFillColor(nvg, nvgRGBA(120, 110, 95, 160))
-            nvgText(nvg, contentX + contentW - 8, zy + zoneItemH * 0.5, zone.desc)
+            UICore.strokeTextA(nvg, zone.desc,
+                contentX + contentW - 6, zy + zoneItemH * 0.5, 10,
+                UICore.C_GEM, selected and 220 or 140,
+                UICore.C_STROKE, 1.2,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         else
-            nvgFillColor(nvg, nvgRGBA(180, 140, 40, 200))
-            nvgText(nvg, contentX + contentW - 8, zy + zoneItemH * 0.5, "" .. FormatUtils.formatNumber(cost) .. " 金币")
+            UICore.strokeText(nvg,
+                "🪙 " .. FormatUtils.formatNumber(cost),
+                contentX + contentW - 6, zy + zoneItemH * 0.5, 10,
+                {255, 200, 60}, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         end
 
-        -- 点击区域：已解锁选中，未解锁弹确认
+        -- 点击区域（还原屏幕坐标）
         table.insert(clickRects_, {
-            x = contentX, y = zy, w = contentW, h = zoneItemH,
+            x = panelCX + (contentX - panelW * 0.5) * scale,
+            y = panelCY + (zy - panelH * 0.5) * scale,
+            w = contentW * scale, h = zoneItemH * scale,
             action = unlocked and "select_zone" or "try_unlock_zone",
             data = i,
         })
     end
-    curY = curY + #ZONE_LIST * (zoneItemH + zoneGap) + 8
+    curY = curY + #ZONE_LIST * (zoneItemH + zoneGap) + 10
 
-    -- ── 鱼饵选择 ──
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(100, 90, 70, 200))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgText(nvg, contentX, curY, "选择鱼饵")
-    curY = curY + 18
+    -- 渐变分隔线
+    local divPaint = nvgLinearGradient(nvg,
+        contentX, curY, contentX + contentW, curY,
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 0),
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 120))
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, contentX, curY); nvgLineTo(nvg, contentX + contentW, curY)
+    nvgStrokePaint(nvg, divPaint); nvgStrokeWidth(nvg, 1); nvgStroke(nvg)
+    curY = curY + 8
 
-    local baitItemH = 36
+    -- ── 鱼饵选择小节标题 ──
+    UICore.strokeTextA(nvg, "选择鱼饵",
+        contentX, curY + 6, 11,
+        UICore.C_GEM, 200, UICore.C_STROKE, 1.2,
+        NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+    curY = curY + 20
+
+    -- ── 鱼饵列表 ──
+    local baitItemH = 40
+    local baitGap = 5
     for i, bait in ipairs(BAIT_LIST) do
-        local by = curY + (i - 1) * (baitItemH + 6)
+        local by = curY + (i - 1) * (baitItemH + baitGap)
         local selected = (i == selectedBaitIdx_)
 
-        -- 背景
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, contentX, by, contentW, baitItemH, 8)
+        -- 行背景
         if selected then
-            nvgFillColor(nvg, nvgRGBA(70, 140, 200, 50))
+            UICore.fillRRectGrad(nvg, contentX, by, contentW, baitItemH, 8,
+                {30, 90, 170}, 180, {20, 65, 130}, 200)
+            UICore.strokeRRect(nvg, contentX, by, contentW, baitItemH, 8,
+                UICore.C_GEM, 1.5, 200)
         else
-            nvgFillColor(nvg, nvgRGBA(200, 195, 185, 30))
-        end
-        nvgFill(nvg)
-
-        -- 选中边框
-        if selected then
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, contentX, by, contentW, baitItemH, 8)
-            nvgStrokeColor(nvg, nvgRGBA(70, 140, 200, 180))
-            nvgStrokeWidth(nvg, 1.5)
-            nvgStroke(nvg)
+            UICore.fillRRectGrad(nvg, contentX, by, contentW, baitItemH, 8,
+                {18, 45, 95}, 130, {12, 30, 70}, 150)
+            UICore.strokeRRect(nvg, contentX, by, contentW, baitItemH, 8,
+                {40, 80, 140}, 1.0, 70)
         end
 
-        -- 图标
-        nvgFontSize(nvg, 16)
-        nvgFillColor(nvg, nvgRGBA(50, 45, 35, 255))
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-        nvgText(nvg, contentX + 8, by + baitItemH * 0.5, bait.icon)
+        -- 鱼饵图标（左侧）
+        local iconSz2 = 28
+        local iconX2 = contentX + 6
+        local iconY2 = by + (baitItemH - iconSz2) * 0.5
+        IconManager.draw(nvg, bait.icon, iconX2, iconY2, iconSz2, iconSz2)
 
-        -- 名称
-        nvgFontSize(nvg, 12)
-        nvgFillColor(nvg, nvgRGBA(50, 45, 35, 255))
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgText(nvg, contentX + 30, by + 4, bait.name)
+        -- 名称 + 描述（图标右侧）
+        local textOffX = iconX2 + iconSz2 + 7
+        UICore.strokeText(nvg, bait.name,
+            textOffX, by + 8, 12,
+            selected and UICore.C_TITLE or {200, 220, 255},
+            UICore.C_STROKE, 1.5,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+        UICore.strokeTextA(nvg, bait.desc,
+            textOffX, by + 24, 9,
+            UICore.C_GEM, selected and 200 or 130,
+            UICore.C_STROKE, 1.2,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
 
-        -- 描述
-        nvgFontSize(nvg, 9)
-        nvgFillColor(nvg, nvgRGBA(120, 110, 95, 180))
-        nvgText(nvg, contentX + 30, by + 20, bait.desc)
-
-        -- 费用 (右侧)
+        -- 费用（右侧）
         if bait.cost > 0 then
-            nvgFontSize(nvg, 11)
-            nvgFillColor(nvg, nvgRGBA(200, 160, 40, 255))
-            nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, contentX + contentW - 8, by + baitItemH * 0.5,
-                FormatUtils.formatNumber(bait.cost) .. " 金币")
+            UICore.strokeText(nvg,
+                "🪙 " .. FormatUtils.formatNumber(bait.cost),
+                contentX + contentW - 6, by + baitItemH * 0.5, 11,
+                {255, 200, 60}, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         else
-            nvgFontSize(nvg, 10)
-            nvgFillColor(nvg, nvgRGBA(100, 170, 80, 220))
-            nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, contentX + contentW - 8, by + baitItemH * 0.5, "免费")
+            UICore.strokeText(nvg, "免费",
+                contentX + contentW - 6, by + baitItemH * 0.5, 11,
+                {80, 220, 130}, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         end
 
-        -- 点击区域
+        -- 点击区域（还原屏幕坐标）
         table.insert(clickRects_, {
-            x = contentX, y = by, w = contentW, h = baitItemH,
+            x = panelCX + (contentX - panelW * 0.5) * scale,
+            y = panelCY + (by - panelH * 0.5) * scale,
+            w = contentW * scale, h = baitItemH * scale,
             action = "select_bait", data = i,
         })
     end
-    curY = curY + #BAIT_LIST * (baitItemH + 6) + 8
+    curY = curY + #BAIT_LIST * (baitItemH + baitGap) + 10
 
     -- ── 出发按钮 ──
-    local goBtnW = 130
-    local goBtnH = 34
+    local goBtnW = 140
+    local goBtnH = 36
     local goBtnX = px + (panelW - goBtnW) * 0.5
     local goBtnY = curY
 
-    -- 按钮底色
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, goBtnX, goBtnY, goBtnW, goBtnH, 10)
-    nvgFillColor(nvg, nvgRGBA(70, 150, 210, 230))
-    nvgFill(nvg)
-
-    -- 按钮文字
-    nvgFontSize(nvg, 15)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, goBtnX + goBtnW * 0.5, goBtnY + goBtnH * 0.5, "⛵ 出发!")
+    UICore.fillRRectGrad(nvg, goBtnX, goBtnY, goBtnW, goBtnH, 10,
+        {20, 120, 200}, 240, {12, 80, 155}, 255)
+    UICore.strokeRRect(nvg, goBtnX, goBtnY, goBtnW, goBtnH, 10,
+        UICore.C_GEM, 1.8, 220)
+    UICore.strokeText(nvg, "⛵ 出发!",
+        goBtnX + goBtnW * 0.5, goBtnY + goBtnH * 0.5, 15,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     table.insert(clickRects_, {
-        x = goBtnX, y = goBtnY, w = goBtnW, h = goBtnH,
+        x = panelCX + (goBtnX - panelW * 0.5) * scale,
+        y = panelCY + (goBtnY - panelH * 0.5) * scale,
+        w = goBtnW * scale, h = goBtnH * scale,
         action = "confirm_go_fishing",
     })
 
-    -- ── 解锁确认弹窗 ──
+    nvgRestore(nvg)
+
+    -- ── 解锁确认弹窗（不受面板缩放影响，独立渲染）──
     if unlockPopup_.open then
-        -- 遮罩（在面板之上）
+        local screenPX = panelCX - panelW * 0.5 * scale
+        local screenPY = panelCY - panelH * 0.5 * scale
+        local screenPW = panelW * scale
+        local screenPH = panelH * scale
+
+        -- 面板内遮罩
         nvgBeginPath(nvg)
-        nvgRect(nvg, px, py, panelW, panelH)
-        nvgFillColor(nvg, nvgRGBA(0, 0, 0, 100))
+        nvgRect(nvg, screenPX, screenPY, screenPW, screenPH)
+        nvgFillColor(nvg, nvgRGBA(0, 5, 20, 140))
         nvgFill(nvg)
 
-        local popW = math.min(200, panelW - 20)
-        local popH = 110
-        local popX = px + (panelW - popW) * 0.5
-        local popY = py + (panelH - popH) * 0.5
+        local popW = math.min(210, panelW * scale - 20)
+        local popH = 130
+        local popX = panelCX - popW * 0.5
+        local popY = panelCY - popH * 0.5
 
-        -- 弹窗底框 (九宫格)
-        if imgPanelBg_ and imgPanelBg_ > 0 then
-            drawNineSlice(nvg, imgPanelBg_, popX, popY, popW, popH, 16, 1.0)
-        else
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, popX, popY, popW, popH, 8)
-            nvgFillColor(nvg, nvgRGBA(250, 245, 235, 250))
-            nvgFill(nvg)
-        end
+        UICore.drawPanel(nvg, popX, popY, popW, popH, 10)
+        local popTitleH = UICore.drawPanelTitle(nvg, popX, popY, popW,
+            "解锁 " .. unlockPopup_.zoneName)
 
-        -- 标题
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 13)
-        nvgFillColor(nvg, nvgRGBA(60, 50, 40, 255))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgText(nvg, popX + popW * 0.5, popY + 12, "解锁 " .. unlockPopup_.zoneName .. "？")
+        local popCX = popX + popW * 0.5
+        local ty2 = popY + popTitleH + 6
 
-        -- 费用显示
-        nvgFontSize(nvg, 14)
-        local coinColor
-        if unlockPopup_.canAfford then
-            coinColor = nvgRGBA(200, 160, 40, 255)
-        else
-            coinColor = nvgRGBA(220, 60, 50, 255)  -- 红色：余额不足
-        end
-        nvgFillColor(nvg, coinColor)
-        nvgText(nvg, popX + popW * 0.5, popY + 32, FormatUtils.formatNumber(unlockPopup_.cost) .. " 金币")
+        -- 费用
+        local coinOk = unlockPopup_.canAfford
+        UICore.strokeText(nvg,
+            "🪙 " .. FormatUtils.formatNumber(unlockPopup_.cost),
+            popCX, ty2 + 8, 14,
+            coinOk and {255, 210, 60} or {240, 80, 60},
+            UICore.C_STROKE, 2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
+        UICore.strokeTextA(nvg,
+            "当前: " .. FormatUtils.formatNumber(GameState.coins),
+            popCX, ty2 + 28, 10,
+            coinOk and UICore.C_GEM or {240, 80, 60},
+            180, UICore.C_STROKE, 1.2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
 
-        -- 当前金币
-        nvgFontSize(nvg, 10)
-        nvgFillColor(nvg, unlockPopup_.canAfford and nvgRGBA(100, 95, 80, 180) or nvgRGBA(220, 60, 50, 180))
-        nvgText(nvg, popX + popW * 0.5, popY + 52, "当前: " .. FormatUtils.formatNumber(GameState.coins))
-
-        -- 按钮区
-        local btnW2 = 72
+        -- 按钮行
+        local btnW2 = 76
         local btnH2 = 28
-        local btnGap = 12
-        local btnTotalW = btnW2 * 2 + btnGap
-        local btnStartX = popX + (popW - btnTotalW) * 0.5
-        local btnY2 = popY + popH - btnH2 - 12
+        local btnGap = 14
+        local btnY2 = popY + popH - btnH2 - 10
+        local cancelX2 = popCX - btnGap * 0.5 - btnW2
+        local confirmX2 = popCX + btnGap * 0.5
 
-        -- 取消按钮
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, btnStartX, btnY2, btnW2, btnH2, 6)
-        nvgFillColor(nvg, nvgRGBA(180, 175, 165, 150))
-        nvgFill(nvg)
-        nvgFontSize(nvg, 12)
-        nvgFillColor(nvg, nvgRGBA(80, 70, 60, 255))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgText(nvg, btnStartX + btnW2 * 0.5, btnY2 + btnH2 * 0.5, "取消")
+        -- 取消
+        UICore.fillRRectGrad(nvg, cancelX2, btnY2, btnW2, btnH2, 7,
+            {20, 45, 85}, 200, {12, 28, 60}, 220)
+        UICore.strokeRRect(nvg, cancelX2, btnY2, btnW2, btnH2, 7,
+            UICore.C_GEM, 1.0, 90)
+        UICore.strokeText(nvg, "取消",
+            cancelX2 + btnW2 * 0.5, btnY2 + btnH2 * 0.5, 12,
+            UICore.C_TITLE, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         table.insert(clickRects_, {
-            x = btnStartX, y = btnY2, w = btnW2, h = btnH2,
+            x = cancelX2, y = btnY2, w = btnW2, h = btnH2,
             action = "cancel_unlock",
         })
 
-        -- 确认按钮
-        local confirmX = btnStartX + btnW2 + btnGap
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, confirmX, btnY2, btnW2, btnH2, 6)
-        if unlockPopup_.canAfford then
-            nvgFillColor(nvg, nvgRGBA(70, 150, 210, 220))
-        else
-            nvgFillColor(nvg, nvgRGBA(160, 155, 145, 120))
-        end
-        nvgFill(nvg)
-        nvgFontSize(nvg, 12)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgText(nvg, confirmX + btnW2 * 0.5, btnY2 + btnH2 * 0.5, unlockPopup_.canAfford and "确认" or "不足")
-        if unlockPopup_.canAfford then
+        -- 确认
+        if coinOk then
+            UICore.fillRRectGrad(nvg, confirmX2, btnY2, btnW2, btnH2, 7,
+                {20, 120, 200}, 230, {12, 80, 155}, 245)
+            UICore.strokeRRect(nvg, confirmX2, btnY2, btnW2, btnH2, 7,
+                UICore.C_GEM, 1.5, 200)
+            UICore.strokeText(nvg, "确认解锁",
+                confirmX2 + btnW2 * 0.5, btnY2 + btnH2 * 0.5, 12,
+                UICore.C_TITLE, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
             table.insert(clickRects_, {
-                x = confirmX, y = btnY2, w = btnW2, h = btnH2,
+                x = confirmX2, y = btnY2, w = btnW2, h = btnH2,
                 action = "confirm_unlock",
             })
+        else
+            UICore.fillRRectGrad(nvg, confirmX2, btnY2, btnW2, btnH2, 7,
+                {15, 30, 60}, 140, {8, 18, 40}, 160)
+            UICore.strokeRRect(nvg, confirmX2, btnY2, btnW2, btnH2, 7,
+                {30, 55, 100}, 1.0, 60)
+            UICore.strokeTextA(nvg, "金币不足",
+                confirmX2 + btnW2 * 0.5, btnY2 + btnH2 * 0.5, 12,
+                {120, 150, 200}, 140, UICore.C_STROKE, 1.2,
+                NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         end
     end
 
-    -- 面板背景吸收点击（防止穿透到 close_go_fishing）
-    table.insert(clickRects_, { x = px, y = py, w = panelW, h = panelH, action = "panel_bg" })
-    -- 关闭区域 (面板外点击关闭) — 必须最后注册,
-    -- 这样 clickRects_ 遍历时面板内按钮优先匹配
+    -- 面板背景吸收点击（防止穿透）
+    table.insert(clickRects_, {
+        x = panelCX - panelW * 0.5 * scale,
+        y = panelCY - panelH * 0.5 * scale,
+        w = panelW * scale, h = panelH * scale,
+        action = "panel_bg",
+    })
+    -- 全屏关闭区域（面板外点击关闭）— 必须最后注册
     table.insert(clickRects_, { x = x, y = y, w = w, h = h, action = "close_go_fishing" })
 end
 
@@ -1995,64 +2001,89 @@ end
 -- ============================================================================
 
 function IndustryScene.renderMenuPanel(nvg, x, y, w, h)
+    -- ===== 动画进度 =====
+    local t = UICore.easeOutCubic(menuPanelT_)
+    local maskAlpha = math.floor(t * 160)
+
+    -- 半透明遮罩
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
+    nvgFillColor(nvg, nvgRGBA(0, 5, 20, maskAlpha))
     nvgFill(nvg)
+
+    if t <= 0 then return end
 
     local panelW = w * 0.88
-    local panelH = h * 0.7
-    local panelX = x + (w - panelW) * 0.5
-    local panelY = y + (h - panelH) * 0.4
+    local panelH = h * 0.75
+    local panelCX = x + w * 0.5
+    local panelCY = y + h * 0.48
 
-    -- 九宫格底框
-    if imgPanelBg_ and imgPanelBg_ > 0 then
-        drawNineSlice(nvg, imgPanelBg_, panelX, panelY, panelW, panelH, 16, 0.95)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 12)
-        nvgFillColor(nvg, nvgRGBA(50, 40, 30, 240))
-        nvgFill(nvg)
-    end
+    -- 缩放动画变换
+    local scale = 0.85 + 0.15 * t
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, t)
+    nvgTranslate(nvg, panelCX, panelCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -panelW * 0.5, -panelH * 0.5)
 
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 20)
-    nvgFillColor(nvg, nvgRGBA(60, 50, 40, 250))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, panelX + panelW * 0.5, panelY + 14, "菜单")
+    local px, py = 0, 0
+    local pad = 10
 
-    local closeSize = 28
-    local closeX = panelX + panelW - closeSize - 8
-    local closeY = panelY + 8
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, closeX, closeY, closeSize, closeSize, 4)
-    nvgFillColor(nvg, nvgRGBA(200, 80, 60, 200))
-    nvgFill(nvg)
-    nvgFontSize(nvg, 16)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, "X")
+    -- ===== 深海蓝面板背景 =====
+    UICore.drawPanel(nvg, px, py, panelW, panelH, 14)
+    local titleBarH = UICore.drawPanelTitle(nvg, px, py, panelW, "🍣 料理菜单")
 
+    -- 关闭按钮
+    local closeSize = 26
+    local closeX = px + panelW - closeSize - 8
+    local closeY = py + (titleBarH - closeSize) * 0.5
+    UICore.fillRRectGrad(nvg, closeX, closeY, closeSize, closeSize, 6,
+        {140, 40, 30}, 230, {100, 25, 20}, 240)
+    UICore.strokeRRect(nvg, closeX, closeY, closeSize, closeSize, 6,
+        {255, 120, 100}, 1.2, 180)
+    UICore.strokeText(nvg, "✕",
+        closeX + closeSize * 0.5, closeY + closeSize * 0.5, 13,
+        UICore.C_TITLE, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+    -- 关闭按钮命中区（还原到屏幕坐标）
     table.insert(clickRects_, {
-        x = closeX, y = closeY, w = closeSize, h = closeSize,
+        x = panelCX + (closeX - panelW * 0.5 + closeSize * 0.5) * scale - closeSize * scale * 0.5,
+        y = panelCY + (closeY - panelH * 0.5 + closeSize * 0.5) * scale - closeSize * scale * 0.5,
+        w = closeSize * scale, h = closeSize * scale,
         action = "close_menu",
     })
 
     -- ---- 待处理区（合成队列）----
-    local queueY = panelY + 50
-    local cardMargin = 8
-    queueY = IndustryScene.renderSynthesisQueue(nvg, panelX + cardMargin, queueY,
+    local cardMargin = pad
+    local queueY = py + titleBarH + 6
+    queueY = IndustryScene.renderSynthesisQueue(nvg, px + cardMargin, queueY,
         panelW - cardMargin * 2)
 
+    -- 渐变分隔线
+    queueY = queueY + 4
+    local divPaint = nvgLinearGradient(nvg,
+        px + pad * 2, queueY, px + panelW - pad * 2, queueY,
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 0),
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 140))
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, px + pad * 2, queueY)
+    nvgLineTo(nvg, px + panelW - pad * 2, queueY)
+    nvgStrokePaint(nvg, divPaint)
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
+    queueY = queueY + 6
+
     -- ---- 配方卡片 ----
-    local cardY = queueY + 8
+    local cardY = queueY
     for _, recipe in ipairs(GameConfig.SUSHI) do
-        IndustryScene.renderRecipeCard(nvg, panelX + cardMargin, cardY,
+        local cardH = IndustryScene.renderRecipeCard(nvg, px + cardMargin, cardY,
             panelW - cardMargin * 2, recipe)
-        cardY = cardY + 96
+        cardY = cardY + cardH + 6
     end
 
-    -- ---- 升级弹窗 ----
+    nvgRestore(nvg)
+
+    -- ---- 升级弹窗（在面板外层绘制，不受缩放影响）----
     if upgradePopup_.open then
         IndustryScene.renderUpgradePopup(nvg, x, y, w, h)
     end
@@ -2072,42 +2103,44 @@ function IndustryScene.renderSynthesisQueue(nvg, ax, ay, aw)
     local maxSlots = GameConfig.INDUSTRY.QUEUE_MAX_SLOTS
     local unlocked = GameState.unlockedSynthesisSlots
     local queue    = GameState.synthesisQueue
-
-    -- 区域标题
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 13)
-    nvgFillColor(nvg, nvgRGBA(80, 70, 50, 220))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
     local usedCount = IndustrySystem:getQueueUsedCount()
-    nvgText(nvg, ax, ay, string.format("待处理区 (%d/%d)", usedCount, unlocked))
 
-    -- 解锁按钮（标题右侧）
+    -- ---- 区域标题 ----
+    UICore.strokeText(nvg,
+        string.format("⚗ 待处理区 (%d/%d)", usedCount, unlocked),
+        ax, ay + 7, 12,
+        UICore.C_GEM, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+
+    -- ---- 解锁按钮（标题右侧）----
     if unlocked < maxSlots then
         local nextCost = GameConfig.INDUSTRY.QUEUE_SLOT_UNLOCK_COST[unlocked + 1] or 99999
         local canAfford = GameState.coins >= nextCost
-        local ubtnW = 72
-        local ubtnH = 20
+        local ubtnW = 80
+        local ubtnH = 22
         local ubtnX = ax + aw - ubtnW
-        local ubtnY = ay - 2
+        local ubtnY = ay
 
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, ubtnX, ubtnY, ubtnW, ubtnH, 4)
         if canAfford then
-            nvgFillColor(nvg, nvgRGBA(70, 160, 90, 220))
+            UICore.fillRRectGrad(nvg, ubtnX, ubtnY, ubtnW, ubtnH, 5,
+                {20, 140, 80}, 230, {12, 100, 55}, 240)
+            UICore.strokeRRect(nvg, ubtnX, ubtnY, ubtnW, ubtnH, 5,
+                {60, 220, 130}, 1.2, 180)
         else
-            nvgFillColor(nvg, nvgRGBA(160, 155, 145, 140))
+            UICore.fillRRectGrad(nvg, ubtnX, ubtnY, ubtnW, ubtnH, 5,
+                {25, 45, 80}, 160, {15, 30, 60}, 180)
+            UICore.strokeRRect(nvg, ubtnX, ubtnY, ubtnW, ubtnH, 5,
+                UICore.C_GEM, 1.0, 60)
         end
-        nvgFill(nvg)
 
-        nvgFontSize(nvg, 10)
-        nvgFillColor(nvg, canAfford and nvgRGBA(255, 255, 255, 240) or nvgRGBA(200, 195, 185, 180))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        if nextCost > 0 then
-            nvgText(nvg, ubtnX + ubtnW * 0.5, ubtnY + ubtnH * 0.5,
-                "扩容 " .. FormatUtils.formatNumber(nextCost) .. " 金币")
-        else
-            nvgText(nvg, ubtnX + ubtnW * 0.5, ubtnY + ubtnH * 0.5, "扩容 (免费)")
-        end
+        local btnLabel = nextCost > 0
+            and ("扩容 " .. FormatUtils.formatNumber(nextCost))
+            or "扩容 (免费)"
+        UICore.strokeText(nvg, btnLabel,
+            ubtnX + ubtnW * 0.5, ubtnY + ubtnH * 0.5, 10,
+            canAfford and UICore.C_TITLE or {120, 150, 190},
+            UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
         table.insert(clickRects_, {
             x = ubtnX, y = ubtnY, w = ubtnW, h = ubtnH,
@@ -2115,92 +2148,82 @@ function IndustryScene.renderSynthesisQueue(nvg, ax, ay, aw)
         })
     end
 
-    -- 槽位网格
-    local slotSize = 48
-    local slotGap = 6
+    -- ---- 槽位网格 ----
+    local slotSize = 50
+    local slotGap  = 6
     local slotsPerRow = math.floor((aw + slotGap) / (slotSize + slotGap))
     if slotsPerRow < 1 then slotsPerRow = 1 end
-    local gridY = ay + 20
+    local gridY = ay + 26
 
     for i = 1, maxSlots do
-        local col = ((i - 1) % slotsPerRow)
+        local col = (i - 1) % slotsPerRow
         local row = math.floor((i - 1) / slotsPerRow)
         local sx = ax + col * (slotSize + slotGap)
-        local sy = gridY + row * (slotSize + slotGap + 14)
+        local sy = gridY + row * (slotSize + slotGap + 12)
 
         if i > unlocked then
-            -- 锁定槽位
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, sx, sy, slotSize, slotSize, 6)
-            nvgFillColor(nvg, nvgRGBA(100, 95, 85, 60))
-            nvgFill(nvg)
-            nvgStrokeColor(nvg, nvgRGBA(140, 130, 120, 80))
-            nvgStrokeWidth(nvg, 1)
-            nvgStroke(nvg)
+            -- ===== 锁定槽位 =====
+            UICore.fillRRectGrad(nvg, sx, sy, slotSize, slotSize, 7,
+                {8, 20, 45}, 80, {5, 12, 30}, 100)
+            UICore.strokeRRect(nvg, sx, sy, slotSize, slotSize, 7,
+                {30, 60, 110}, 1.0, 80)
+            UICore.strokeTextA(nvg, "🔒",
+                sx + slotSize * 0.5, sy + slotSize * 0.5, 18,
+                {80, 110, 160}, 120, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
-            nvgFontSize(nvg, 18)
-            nvgFillColor(nvg, nvgRGBA(140, 130, 115, 120))
-            nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, sx + slotSize * 0.5, sy + slotSize * 0.5, "锁定")
         elseif queue[i] then
-            -- 合成中
-            local slot = queue[i]
+            -- ===== 合成中槽位 =====
+            local slot   = queue[i]
             local recipe = GameConfig.SUSHI_BY_ID[slot.recipeId]
             local progress = 1.0 - (slot.timer / slot.totalTime)
             progress = math.max(0, math.min(1, progress))
 
-            -- 槽位背景
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, sx, sy, slotSize, slotSize, 6)
-            nvgFillColor(nvg, nvgRGBA(255, 240, 210, 180))
-            nvgFill(nvg)
-            nvgStrokeColor(nvg, nvgRGBA(220, 180, 80, 180))
-            nvgStrokeWidth(nvg, 1.5)
-            nvgStroke(nvg)
+            -- 槽位背景（琥珀暖色调）
+            UICore.fillRRectGrad(nvg, sx, sy, slotSize, slotSize, 7,
+                {60, 40, 10}, 200, {40, 25, 5}, 220)
+            UICore.strokeRRect(nvg, sx, sy, slotSize, slotSize, 7,
+                {220, 160, 40}, 1.5, 200)
 
-            -- 配方图标
+            -- 配方图标（用 IconManager）
             if recipe then
-                nvgFontSize(nvg, 20)
-                nvgFillColor(nvg, nvgRGBA(0, 0, 0, 220))
-                nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-                nvgText(nvg, sx + slotSize * 0.5, sy + slotSize * 0.4, recipe.icon)
+                IconManager.drawCentered(nvg,
+                    recipe.icon,
+                    sx + slotSize * 0.5, sy + slotSize * 0.42,
+                    slotSize * 0.55)
             end
 
-            -- 进度条（序列帧）
-            local progR = 10
+            -- 圆形进度环
+            local progR = 9
             IndustryScene.drawCircleProgress(nvg,
-                sx + slotSize - progR - 2,
-                sy + slotSize - progR - 2,
+                sx + slotSize - progR - 3,
+                sy + slotSize - progR - 3,
                 progR, progress,
                 nvgRGBA(220, 160, 40, 255),
-                nvgRGBA(80, 70, 60, 120))
+                nvgRGBA(10, 25, 60, 160))
 
-            -- 剩余时间文字（槽位下方）
+            -- 剩余时间
             local remaining = math.ceil(math.max(0, slot.timer))
-            nvgFontSize(nvg, 9)
-            nvgFillColor(nvg, nvgRGBA(160, 120, 30, 220))
-            nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-            nvgText(nvg, sx + slotSize * 0.5, sy + slotSize + 1, remaining .. "s")
+            UICore.strokeTextA(nvg, remaining .. "s",
+                sx + slotSize * 0.5, sy + slotSize + 1, 9,
+                {220, 170, 60}, 220, UICore.C_STROKE, 1.2,
+                NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
         else
-            -- ⬜ 空闲槽位
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, sx, sy, slotSize, slotSize, 6)
-            nvgFillColor(nvg, nvgRGBA(230, 225, 215, 100))
-            nvgFill(nvg)
-            nvgStrokeColor(nvg, nvgRGBA(180, 170, 155, 100))
-            nvgStrokeWidth(nvg, 1)
-            nvgStroke(nvg)
-
-            nvgFontSize(nvg, 10)
-            nvgFillColor(nvg, nvgRGBA(160, 150, 135, 120))
-            nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, sx + slotSize * 0.5, sy + slotSize * 0.5, "空")
+            -- ===== 空闲槽位 =====
+            UICore.fillRRectGrad(nvg, sx, sy, slotSize, slotSize, 7,
+                {15, 35, 75}, 100, {10, 22, 55}, 120)
+            UICore.strokeRRect(nvg, sx, sy, slotSize, slotSize, 7,
+                UICore.C_GEM, 1.0, 60)
+            UICore.strokeTextA(nvg, "空",
+                sx + slotSize * 0.5, sy + slotSize * 0.5, 11,
+                UICore.C_GEM, 80, UICore.C_STROKE, 1.2,
+                NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         end
     end
 
     -- 计算区域底部
     local totalRows = math.ceil(maxSlots / slotsPerRow)
-    local bottomY = gridY + totalRows * (slotSize + slotGap + 14)
+    local bottomY = gridY + totalRows * (slotSize + slotGap + 12)
     return bottomY
 end
 
@@ -2209,279 +2232,342 @@ end
 -- ============================================================================
 
 function IndustryScene.renderUpgradePopup(nvg, x, y, w, h)
-    -- 半透明遮罩
+    -- ===== 动画进度 =====
+    local t = UICore.easeOutCubic(upgradePopupT_)
+    local maskAlpha = math.floor(t * 150)
+
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgFillColor(nvg, nvgRGBA(0, 0, 10, maskAlpha))
     nvgFill(nvg)
 
-    -- 弹窗高度随鱼材料行数自适应
+    if t <= 0 then return end
+
+    -- 弹窗尺寸
     local fishCount = #upgradePopup_.fishReqs
-    local popW = math.min(240, w * 0.65)
-    local popH = 200 + fishCount * 18
-    local popX = math.floor(x + (w - popW) * 0.5)
-    local popY = math.floor(y + (h - popH) * 0.4)
+    local popW = math.min(260, w * 0.70)
+    local popH = 210 + fishCount * 18
+    local popCX = x + w * 0.5
+    local popCY = y + h * 0.4
 
-    -- 九宫格底板
-    if imgPanelBg_ and imgPanelBg_ > 0 then
-        drawNineSlice(nvg, imgPanelBg_, popX, popY, popW, popH, 16, 1.0)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, popX, popY, popW, popH, 12)
-        nvgFillColor(nvg, nvgRGBA(245, 240, 230, 245))
-        nvgFill(nvg)
-    end
+    -- 缩放动画变换
+    local scale = 0.85 + 0.15 * t
+    nvgGlobalAlpha(nvg, t)
+    nvgSave(nvg)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
 
+    local px, py = 0, 0
     local pad = 14
-    local centerX = popX + popW * 0.5
-    local ty = popY + pad
+    local centerX = px + popW * 0.5
 
-    -- 标题
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 16)
-    nvgFillColor(nvg, nvgRGBA(50, 40, 25, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, centerX, ty, "升级 " .. upgradePopup_.recipeName)
-    ty = ty + 28
+    -- ===== 深海蓝面板 =====
+    UICore.drawPanel(nvg, px, py, popW, popH, 12)
+    local titleBarH = UICore.drawPanelTitle(nvg, px, py, popW,
+        "升级 " .. upgradePopup_.recipeName)
+
+    local ty = py + titleBarH + 4
 
     -- 等级变化
-    nvgFontSize(nvg, 13)
-    nvgFillColor(nvg, nvgRGBA(80, 70, 50, 220))
     local lvlFrom = upgradePopup_.currentLevel
     local lvlTo = lvlFrom + 1
-    nvgText(nvg, centerX, ty, string.format("等级: Lv.%d → Lv.%d", lvlFrom, lvlTo))
-    ty = ty + 22
-
-    -- 售价变化
-    nvgFontSize(nvg, 13)
-    nvgFillColor(nvg, nvgRGBA(160, 120, 20, 230))
-    nvgText(nvg, centerX, ty, string.format("售价: %s → %s 金币",
-        FormatUtils.formatNumber(upgradePopup_.curPrice),
-        FormatUtils.formatNumber(upgradePopup_.nextPrice)))
+    UICore.strokeText(nvg,
+        string.format("等级: Lv.%d  →  Lv.%d", lvlFrom, lvlTo),
+        centerX, ty + 9, 13,
+        UICore.C_GEM, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
     ty = ty + 24
 
+    -- 售价变化
+    UICore.strokeText(nvg,
+        string.format("售价: %s → %s 金币",
+            FormatUtils.formatNumber(upgradePopup_.curPrice),
+            FormatUtils.formatNumber(upgradePopup_.nextPrice)),
+        centerX, ty + 9, 12,
+        {255, 220, 100}, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
+    ty = ty + 26
+
     -- ---- 消耗区域 ----
-    -- 分隔线
+    -- 渐变分隔线
+    local divPaint = nvgLinearGradient(nvg,
+        px + pad, ty, px + popW - pad, ty,
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 0),
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 120))
     nvgBeginPath(nvg)
-    nvgMoveTo(nvg, popX + pad, math.floor(ty))
-    nvgLineTo(nvg, popX + popW - pad, math.floor(ty))
-    nvgStrokeColor(nvg, nvgRGBA(180, 170, 150, 100))
-    nvgStrokeWidth(nvg, 1)
-    nvgStroke(nvg)
+    nvgMoveTo(nvg, px + pad, ty); nvgLineTo(nvg, px + popW - pad, ty)
+    nvgStrokePaint(nvg, divPaint); nvgStrokeWidth(nvg, 1); nvgStroke(nvg)
     ty = ty + 8
 
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(100, 90, 70, 200))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, centerX, ty, "升级消耗")
-    ty = ty + 18
+    UICore.strokeTextA(nvg, "升级消耗",
+        centerX, ty + 7, 12,
+        UICore.C_GEM, 180, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
+    ty = ty + 20
 
     -- 金币费用
-    nvgFontSize(nvg, 13)
     local coinOk = GameState.coins >= upgradePopup_.cost
-    nvgFillColor(nvg, coinOk and nvgRGBA(80, 70, 50, 220) or nvgRGBA(220, 50, 30, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, centerX, ty, string.format("金币 %s / %s",
-        FormatUtils.formatNumber(upgradePopup_.cost),
-        FormatUtils.formatNumber(GameState.coins)))
-    ty = ty + 18
+    local coinColor = coinOk and UICore.C_TITLE or {240, 80, 60}
+    UICore.strokeText(nvg,
+        string.format("🪙 %s / %s",
+            FormatUtils.formatNumber(upgradePopup_.cost),
+            FormatUtils.formatNumber(GameState.coins)),
+        centerX, ty + 7, 13,
+        coinColor, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
+    ty = ty + 20
 
     -- 鱼材料列表
     for _, req in ipairs(upgradePopup_.fishReqs) do
-        nvgFontSize(nvg, 13)
         local enough = (req.have or 0) >= req.count
-        nvgFillColor(nvg, enough and nvgRGBA(60, 100, 60, 230) or nvgRGBA(220, 50, 30, 240))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgText(nvg, centerX, ty, string.format("%s %s ×%d / %d",
-            req.icon, req.displayName, req.count, req.have or 0))
+        local matColor = enough and UICore.C_GEM or {240, 80, 60}
+        UICore.strokeText(nvg,
+            string.format("%s %s ×%d / %d",
+                req.icon, req.displayName, req.count, req.have or 0),
+            centerX, ty + 7, 12,
+            matColor, UICore.C_STROKE, 2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
         ty = ty + 18
     end
 
     -- 不足提示
     if not upgradePopup_.canAfford then
         ty = ty + 2
-        nvgFontSize(nvg, 11)
-        nvgFillColor(nvg, nvgRGBA(220, 50, 30, 200))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
+        local tip = ""
         if not coinOk and not upgradePopup_.fishEnough then
-            nvgText(nvg, centerX, ty, "(金币和材料不足)")
+            tip = "⚠ 金币和材料不足"
         elseif not coinOk then
-            nvgText(nvg, centerX, ty, "(金币不足)")
+            tip = "⚠ 金币不足"
         else
-            nvgText(nvg, centerX, ty, "(材料不足)")
+            tip = "⚠ 材料不足"
         end
+        UICore.strokeTextA(nvg, tip,
+            centerX, ty + 6, 11,
+            {240, 80, 60}, 220, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
     end
 
-    -- 按钮
+    -- ===== 按钮行 =====
     local btnW = 80
     local btnH = 30
-    local btnY = popY + popH - btnH - pad
+    local btnY = py + popH - btnH - pad
     local gap = 16
 
-    -- 取消按钮
-    local cancelX = math.floor(centerX - gap / 2 - btnW)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, cancelX, btnY, btnW, btnH, 6)
-    nvgFillColor(nvg, nvgRGBA(190, 180, 165, 200))
-    nvgFill(nvg)
-    nvgFontSize(nvg, 13)
-    nvgFillColor(nvg, nvgRGBA(80, 70, 55, 230))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, cancelX + btnW * 0.5, btnY + btnH * 0.5, "取消")
+    -- 取消按钮 (暗蓝渐变)
+    local cancelX = math.floor(centerX - gap * 0.5 - btnW)
+    UICore.fillRRectGrad(nvg, cancelX, btnY, btnW, btnH, 8,
+        {20, 50, 90}, 200, {12, 32, 65}, 220)
+    UICore.strokeRRect(nvg, cancelX, btnY, btnW, btnH, 8,
+        UICore.C_GEM, 1.0, 100)
+    UICore.strokeText(nvg, "取消",
+        cancelX + btnW * 0.5, btnY + btnH * 0.5, 13,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     table.insert(clickRects_, {
-        x = cancelX, y = btnY, w = btnW, h = btnH,
+        x = popCX + (cancelX - popW * 0.5) * scale,
+        y = popCY + (btnY - popH * 0.5) * scale,
+        w = btnW * scale, h = btnH * scale,
         action = "cancel_upgrade",
     })
 
     -- 升级按钮
-    local confirmX = math.floor(centerX + gap / 2)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, confirmX, btnY, btnW, btnH, 6)
+    local confirmX = math.floor(centerX + gap * 0.5)
     if upgradePopup_.canAfford then
-        local gp = nvgLinearGradient(nvg, confirmX, btnY, confirmX, btnY + btnH,
-            nvgRGBA(100, 200, 120, 240), nvgRGBA(60, 160, 80, 240))
-        nvgFillPaint(nvg, gp)
-    else
-        nvgFillColor(nvg, nvgRGBA(180, 170, 155, 160))
-    end
-    nvgFill(nvg)
-    nvgFontSize(nvg, 13)
-    nvgFillColor(nvg, upgradePopup_.canAfford
-        and nvgRGBA(255, 255, 255, 240)
-        or nvgRGBA(140, 135, 125, 160))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, confirmX + btnW * 0.5, btnY + btnH * 0.5, "升级")
-    if upgradePopup_.canAfford then
+        UICore.fillRRectGrad(nvg, confirmX, btnY, btnW, btnH, 8,
+            {20, 140, 80}, 240, {12, 100, 55}, 250)
+        UICore.strokeRRect(nvg, confirmX, btnY, btnW, btnH, 8,
+            {60, 220, 130}, 1.5, 200)
+        UICore.strokeText(nvg, "升级",
+            confirmX + btnW * 0.5, btnY + btnH * 0.5, 13,
+            UICore.C_TITLE, UICore.C_STROKE, 2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         table.insert(clickRects_, {
-            x = confirmX, y = btnY, w = btnW, h = btnH,
+            x = popCX + (confirmX - popW * 0.5) * scale,
+            y = popCY + (btnY - popH * 0.5) * scale,
+            w = btnW * scale, h = btnH * scale,
             action = "confirm_upgrade",
         })
+    else
+        UICore.fillRRect(nvg, confirmX, btnY, btnW, btnH, 8, {15, 40, 70}, 160)
+        UICore.strokeRRect(nvg, confirmX, btnY, btnW, btnH, 8,
+            {40, 70, 100}, 0.8, 80)
+        UICore.strokeTextA(nvg, "升级",
+            confirmX + btnW * 0.5, btnY + btnH * 0.5, 13,
+            UICore.C_GEM, 100, UICore.C_STROKE, 1,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     end
+
+    nvgRestore(nvg)
+    nvgGlobalAlpha(nvg, 1.0)
 end
-
--- ============================================================================
--- 配方卡片（九宫格底图 + 等级/升级）
--- ============================================================================
-
 function IndustryScene.renderRecipeCard(nvg, cx, cy, cw, recipe)
-    local cardH = 90
+    local cardH = 96
     local canMake = GameState:hasIngredientsForRecipe(recipe)
     local isZoneUnlocked = GameState.unlockedZones[recipe.zone]
     local level = GameState:getRecipeLevel(recipe.id)
     local isMaxLevel = level >= GameConfig.RECIPE_MAX_LEVEL
+    local pad = 8
 
-    -- 九宫格卡片底图
-    if imgCardBg_ and imgCardBg_ > 0 then
-        drawNineSlice(nvg, imgCardBg_, cx, cy, cw, cardH, 10, isZoneUnlocked and 0.95 or 0.5)
+    -- ===== 卡片背景 =====
+    if isZoneUnlocked then
+        UICore.fillRRectGrad(nvg, cx, cy, cw, cardH, 8,
+            {14, 38, 82}, 210, {9, 24, 60}, 230)
+        UICore.strokeRRect(nvg, cx, cy, cw, cardH, 8,
+            canMake and UICore.C_GEM or {30, 60, 110}, 1.2,
+            canMake and 140 or 80)
     else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, cx, cy, cw, cardH, 8)
-        nvgFillColor(nvg, nvgRGBA(245, 240, 230, 200))
-        nvgFill(nvg)
+        -- 未解锁：暗色半透明
+        UICore.fillRRectGrad(nvg, cx, cy, cw, cardH, 8,
+            {8, 16, 38}, 160, {5, 10, 25}, 180)
+        UICore.strokeRRect(nvg, cx, cy, cw, cardH, 8,
+            {25, 45, 80}, 1.0, 60)
     end
 
-    local pad = 8
-    local textX = cx + pad
-    local textY = cy + pad
-
-    -- ---- 未解锁 ----
+    -- ===== 未解锁状态 =====
     if not isZoneUnlocked then
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 14)
-        nvgFillColor(nvg, nvgRGBA(140, 130, 115, 180))
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgText(nvg, textX, textY, "锁定 " .. recipe.displayName)
-        nvgFontSize(nvg, 11)
-        nvgFillColor(nvg, nvgRGBA(160, 140, 110, 160))
-        nvgText(nvg, textX, textY + 20,
-            "需要解锁" .. (GameConfig.ZONE_DISPLAY[recipe.zone] or recipe.zone))
+        -- 食物图标（暗淡）
+        local iconSz = 36
+        local iconX = cx + pad
+        local iconY = cy + (cardH - iconSz) * 0.5
+        IconManager.draw(nvg, recipe.icon, iconX, iconY, iconSz, iconSz)
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, iconX, iconY, iconSz, iconSz, 4)
+        nvgFillColor(nvg, nvgRGBA(0, 5, 20, 140))
+        nvgFill(nvg)
+
+        UICore.strokeTextA(nvg, "🔒 " .. recipe.displayName,
+            cx + pad + iconSz + 8, cy + cardH * 0.35, 13,
+            {80, 110, 160}, 180, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+        UICore.strokeTextA(nvg,
+            "需要解锁 " .. (GameConfig.ZONE_DISPLAY and GameConfig.ZONE_DISPLAY[recipe.zone] or recipe.zone),
+            cx + pad + iconSz + 8, cy + cardH * 0.35 + 18, 10,
+            {60, 90, 140}, 140, UICore.C_STROKE, 1.2,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
         return cardH
     end
 
-    -- ---- 第一行: 名称 + 等级 ----
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 14)
-    nvgFillColor(nvg, nvgRGBA(50, 40, 25, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgText(nvg, textX, textY, recipe.icon .. " " .. recipe.displayName)
+    -- ===== 左侧食物图标 =====
+    local iconSz = 44
+    local iconX = cx + pad
+    local iconY = cy + (cardH - iconSz) * 0.5
+    -- 图标底座
+    UICore.fillRRectGrad(nvg, iconX - 2, iconY - 2, iconSz + 4, iconSz + 4, 6,
+        {20, 50, 100}, 160, {10, 30, 70}, 180)
+    UICore.strokeRRect(nvg, iconX - 2, iconY - 2, iconSz + 4, iconSz + 4, 6,
+        UICore.C_GEM, 1.0, 80)
+    IconManager.draw(nvg, recipe.icon, iconX, iconY, iconSz, iconSz)
 
-    -- 等级标签
+    -- ===== 右侧内容区 =====
+    local contentX = iconX + iconSz + 8
+    local contentW = cw - (contentX - cx) - pad
+
+    -- ---- 第一行: 名称 + 等级标签 ----
+    local nameY = cy + pad
+    UICore.strokeText(nvg, recipe.displayName,
+        contentX, nameY + 8, 13,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+
+    -- 等级标签（名称右侧）
+    local nameW = nvgTextBounds(nvg, 0, 0, recipe.displayName)
+    nvgFontFace(nvg, "sans")
+    nvgFontSize(nvg, 13)
     local lvlText = isMaxLevel and "MAX" or ("Lv." .. level)
-    local lvlColor = isMaxLevel and nvgRGBA(220, 160, 30, 240) or nvgRGBA(100, 140, 60, 230)
-    local nameW = nvgTextBounds(nvg, 0, 0, recipe.icon .. " " .. recipe.displayName)
-    nvgFontSize(nvg, 11)
-    nvgFillColor(nvg, lvlColor)
-    nvgText(nvg, textX + nameW + 6, textY + 2, lvlText)
+    local tagW = 34
+    local tagH = 16
+    local tagX = contentX + nameW + 6
+    local tagY = nameY + 3
+    if isMaxLevel then
+        UICore.fillRRectGrad(nvg, tagX, tagY, tagW, tagH, 4,
+            {160, 110, 10}, 220, {120, 80, 5}, 240)
+    else
+        UICore.fillRRectGrad(nvg, tagX, tagY, tagW, tagH, 4,
+            {20, 100, 55}, 200, {12, 70, 35}, 220)
+    end
+    UICore.strokeText(nvg, lvlText,
+        tagX + tagW * 0.5, tagY + tagH * 0.5, 9,
+        UICore.C_TITLE, UICore.C_STROKE, 1.2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- ---- 第一行右侧: 售价 + 库存 ----
     local sellPrice = IndustrySystem:getSellPrice(recipe.id)
-    local rightX = cx + cw - pad
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(160, 120, 20, 230))
-    nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
-    nvgText(nvg, rightX, textY, FormatUtils.formatNumber(sellPrice) .. " 金币")
-
     local stock = GameState:getFoodCount(recipe.id)
-    nvgFontSize(nvg, 10)
-    nvgFillColor(nvg, nvgRGBA(80, 110, 150, 210))
-    nvgText(nvg, rightX, textY + 15, "库存:" .. stock)
+    local rightX = cx + cw - pad
+    UICore.strokeText(nvg, "🪙 " .. FormatUtils.formatNumber(sellPrice),
+        rightX, nameY + 6, 11,
+        {255, 215, 80}, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
+    UICore.strokeTextA(nvg, "库存:" .. stock,
+        rightX, nameY + 20, 10,
+        UICore.C_GEM, 180, UICore.C_STROKE, 1.2,
+        NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
 
     -- ---- 第二行: 消耗材料 ----
-    local matX = textX
-    local matY = cy + 32
-    nvgFontSize(nvg, 11)
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(100, 90, 70, 180))
-    nvgText(nvg, matX, matY, "消耗:")
-    matX = matX + nvgTextBounds(nvg, 0, 0, "消耗:") + 4
+    local matY = cy + 34
+    UICore.strokeTextA(nvg, "需:",
+        contentX, matY + 4, 10,
+        UICore.C_GEM, 160, UICore.C_STROKE, 1.2,
+        NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+    local matX = contentX + 18
 
     for _, ing in ipairs(recipe.ingredients) do
         local fish = GameConfig.FISH_BY_ID[ing.fishId]
-        local have = GameState:getFishCount(ing.fishId)
-        local need = ing.count
-        local enough = have >= need
+        if fish then
+            local have = GameState:getFishCount(ing.fishId)
+            local need = ing.count
+            local enough = have >= need
+            local iconSize = 16
 
-        local iconSize = 16
-        local fishImg = fishIcons_[fish.name]
-        if fishImg and fishImg > 0 then
-            local pat = nvgImagePattern(nvg, matX, matY, iconSize, iconSize, 0, fishImg, enough and 1.0 or 0.4)
-            nvgBeginPath(nvg)
-            nvgRect(nvg, matX, matY, iconSize, iconSize)
-            nvgFillPaint(nvg, pat)
-            nvgFill(nvg)
+            -- 鱼图标（用 IconManager，key 为 fish.icon 如 "fish_sardine"）
+            IconManager.draw(nvg, fish.icon, matX, matY, iconSize, iconSize)
+            if not enough then
+                -- 不足时加暗红蒙版
+                nvgBeginPath(nvg)
+                nvgRect(nvg, matX, matY, iconSize, iconSize)
+                nvgFillColor(nvg, nvgRGBA(180, 30, 20, 80))
+                nvgFill(nvg)
+            end
             matX = matX + iconSize + 2
-        end
 
-        nvgFontSize(nvg, 11)
-        nvgFillColor(nvg, enough and nvgRGBA(60, 150, 50, 230) or nvgRGBA(220, 60, 40, 220))
-        local matText = string.format("%d/%d", have, need)
-        nvgText(nvg, matX, matY + 2, matText)
-        matX = matX + nvgTextBounds(nvg, 0, 0, matText) + 8
+            -- 数量文字
+            local matText = string.format("%d/%d", have, need)
+            local matColor = enough and UICore.C_GEM or {240, 80, 60}
+            UICore.strokeText(nvg, matText,
+                matX, matY + 4, 10,
+                matColor, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+            matX = matX + nvgTextBounds(nvg, 0, 0, matText) + 7
+        end
     end
 
-    -- ---- 第三行: 合成按钮 + 升级按钮 ----
-    local btnH = 24
-    local btnY = cy + cardH - btnH - pad
+    -- ---- 第三行: 按钮 ----
+    local btnH = 26
+    local btnY = cy + cardH - btnH - 5
+    local btnGap = 6
 
     -- 升级按钮（右侧）
-    local upgW = 48
+    local upgW = 52
     local upgX = cx + cw - pad - upgW
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, upgX, btnY, upgW, btnH, 5)
     if isMaxLevel then
-        nvgFillColor(nvg, nvgRGBA(180, 170, 155, 120))
+        UICore.fillRRectGrad(nvg, upgX, btnY, upgW, btnH, 6,
+            {20, 40, 70}, 140, {12, 25, 50}, 160)
+        UICore.strokeRRect(nvg, upgX, btnY, upgW, btnH, 6,
+            {40, 70, 120}, 1.0, 80)
+        UICore.strokeTextA(nvg, "MAX",
+            upgX + upgW * 0.5, btnY + btnH * 0.5, 10,
+            {180, 200, 255}, 160, UICore.C_STROKE, 1.2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     else
-        local upgPaint = nvgLinearGradient(nvg, upgX, btnY, upgX, btnY + btnH,
-            nvgRGBA(100, 200, 120, 230), nvgRGBA(60, 160, 80, 230))
-        nvgFillPaint(nvg, upgPaint)
-    end
-    nvgFill(nvg)
-    nvgFontSize(nvg, 11)
-    nvgFillColor(nvg, isMaxLevel and nvgRGBA(140, 135, 125, 160) or nvgRGBA(255, 255, 255, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, upgX + upgW * 0.5, btnY + btnH * 0.5, isMaxLevel and "MAX" or "升级")
-
-    if not isMaxLevel then
+        UICore.fillRRectGrad(nvg, upgX, btnY, upgW, btnH, 6,
+            {20, 140, 80}, 230, {12, 100, 55}, 245)
+        UICore.strokeRRect(nvg, upgX, btnY, upgW, btnH, 6,
+            {60, 220, 130}, 1.2, 180)
+        UICore.strokeText(nvg, "⬆ 升级",
+            upgX + upgW * 0.5, btnY + btnH * 0.5, 11,
+            UICore.C_TITLE, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         table.insert(clickRects_, {
             x = upgX, y = btnY, w = upgW, h = btnH,
             action = "open_upgrade", data = recipe.id,
@@ -2489,28 +2575,30 @@ function IndustryScene.renderRecipeCard(nvg, cx, cy, cw, recipe)
     end
 
     -- 合成按钮（升级按钮左侧）
-    local cookW = 48
-    local cookX = upgX - cookW - 6
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, cookX, btnY, cookW, btnH, 5)
+    local cookW = 52
+    local cookX = upgX - cookW - btnGap
     if canMake then
-        local btnPaint = nvgLinearGradient(nvg, cookX, btnY, cookX, btnY + btnH,
-            nvgRGBA(255, 180, 60, 240), nvgRGBA(230, 140, 30, 240))
-        nvgFillPaint(nvg, btnPaint)
-    else
-        nvgFillColor(nvg, nvgRGBA(200, 190, 175, 140))
-    end
-    nvgFill(nvg)
-    nvgFontSize(nvg, 11)
-    nvgFillColor(nvg, canMake and nvgRGBA(50, 30, 10, 240) or nvgRGBA(150, 140, 125, 160))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, cookX + cookW * 0.5, btnY + btnH * 0.5, "合成")
-
-    if canMake then
+        UICore.fillRRectGrad(nvg, cookX, btnY, cookW, btnH, 6,
+            {200, 130, 20}, 240, {160, 100, 10}, 250)
+        UICore.strokeRRect(nvg, cookX, btnY, cookW, btnH, 6,
+            {255, 200, 80}, 1.2, 200)
+        UICore.strokeText(nvg, "🍳 合成",
+            cookX + cookW * 0.5, btnY + btnH * 0.5, 11,
+            {255, 248, 220}, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         table.insert(clickRects_, {
             x = cookX, y = btnY, w = cookW, h = btnH,
             action = "cook", data = recipe.id,
         })
+    else
+        UICore.fillRRectGrad(nvg, cookX, btnY, cookW, btnH, 6,
+            {20, 35, 65}, 140, {12, 22, 45}, 160)
+        UICore.strokeRRect(nvg, cookX, btnY, cookW, btnH, 6,
+            {40, 65, 110}, 1.0, 70)
+        UICore.strokeTextA(nvg, "🍳 合成",
+            cookX + cookW * 0.5, btnY + btnH * 0.5, 11,
+            {80, 110, 160}, 130, UICore.C_STROKE, 1.2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     end
 
     return cardH
@@ -2522,24 +2610,30 @@ end
 
 function IndustryScene.renderToast(nvg, x, y, w, h)
     if not toastMsg_ then return end
-    local alpha = math.min(1.0, toastTimer_ * 2) * 255
+    local alpha = math.min(1.0, toastTimer_ * 2)
 
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 14)
     local tw = nvgTextBounds(nvg, 0, 0, toastMsg_)
-    local toastW = tw + 40
-    local toastH = 36
+    local toastW = tw + 48
+    local toastH = 38
     local tx = x + (w - toastW) * 0.5
     local ty = y + h * 0.3
 
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, tx, ty, toastW, toastH, 8)
-    nvgFillColor(nvg, nvgRGBA(30, 25, 20, math.floor(alpha * 0.9)))
-    nvgFill(nvg)
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, alpha)
 
-    nvgFillColor(nvg, nvgRGBA(255, 230, 180, math.floor(alpha)))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, tx + toastW * 0.5, ty + toastH * 0.5, toastMsg_)
+    UICore.fillRRectGrad(nvg, tx, ty, toastW, toastH, 10,
+        {12, 50, 110}, 235, {7, 32, 78}, 248)
+    UICore.strokeRRect(nvg, tx, ty, toastW, toastH, 10,
+        UICore.C_GEM, 1.5, 200)
+
+    UICore.strokeText(nvg, toastMsg_,
+        tx + toastW * 0.5, ty + toastH * 0.5, 14,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+
+    nvgRestore(nvg)
 end
 
 -- ============================================================================

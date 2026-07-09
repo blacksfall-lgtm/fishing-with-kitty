@@ -38,6 +38,28 @@ local ICON_PATHS = {
     fish_silverfish = "image/fish/fish_silverfish.png",
     fish_gemfish    = "image/fish/fish_gemfish.png",
     fish_octopus    = "image/fish/fish_octopus.png",
+    -- 稀有鱼类 (11-20)
+    fish_swordfish    = "image/fish/fish_swordfish.png",
+    fish_seahorse     = "image/fish/fish_seahorse.png",
+    fish_anglerfish   = "image/fish/fish_anglerfish.png",
+    fish_jellyfish    = "image/fish/fish_jellyfish.png",
+    fish_viperfish    = "image/fish/fish_viperfish.png",
+    fish_nautilus     = "image/fish/fish_nautilus.png",
+    fish_dragonfish   = "image/fish/fish_dragonfish.png",
+    fish_glowsquid    = "image/fish/fish_glowsquid.png",
+    fish_abysseel     = "image/fish/fish_abysseel.png",
+    fish_phantomray   = "image/fish/fish_phantomray.png",
+    -- 传说鱼类 (21-30)
+    fish_crystalshrimp = "image/fish/fish_crystalshrimp.png",
+    fish_shadowwhale   = "image/fish/fish_shadowwhale.png",
+    fish_voidcrab      = "image/fish/fish_voidcrab.png",
+    fish_abyssjelly    = "image/fish/fish_abyssjelly.png",
+    fish_goldendragon  = "image/fish/fish_goldendragon.png",
+    fish_phoenixfish   = "image/fish/fish_phoenixfish.png",
+    fish_leviathan     = "image/fish/fish_leviathan.png",
+    fish_moonfish      = "image/fish/fish_moonfish.png",
+    fish_stormturtle   = "image/fish/fish_stormturtle.png",
+    fish_cosmicwhale   = "image/fish/fish_cosmicwhale.png",
 
     -- UI 图标 (128x128) — 已有
     coin            = "image/icons/icon_coin.png",
@@ -57,10 +79,33 @@ local ICON_PATHS = {
     upgrade_arrow   = "image/icons/icon_upgrade_arrow.png",
     plus            = "image/icons/icon_plus.png",
 
-    -- 寿司 (复用鱼类图风格)
+    -- 食物图标
     sushi           = "image/icons/icon_sushi.png",
     sushi_roll      = "image/icons/icon_sushi_roll.png",
     bento           = "image/icons/icon_bento.png",
+
+    -- Tab / 功能图标
+    fisher          = "image/icons/icon_fisher.png",
+    egg             = "image/icons/icon_egg.png",
+    lightning       = "image/icons/icon_lightning.png",
+    cat             = "image/icons/icon_cat.png",
+
+    -- 船员图标
+    netter          = "image/icons/icon_netter.png",
+    harvester       = "image/icons/icon_harvester.png",
+    baiter          = "image/icons/icon_baiter.png",
+
+    -- 鱼饵图标
+    worm            = "image/icons/icon_worm.png",
+    candy_bait      = "image/icons/icon_candy_bait.png",
+    shiny_bait      = "image/icons/icon_shiny_bait.png",
+
+    -- 海域图标
+    zone_beach      = "image/icons/icon_zone_beach.png",
+    zone_ocean      = "image/icons/icon_zone_ocean.png",
+    zone_deep       = "image/icons/icon_zone_deep.png",
+    zone_abyss      = "image/icons/icon_zone_abyss.png",
+    zone_legend     = "image/icons/icon_zone_legend.png",
 }
 
 -- ============================================================================
@@ -78,6 +123,28 @@ local FALLBACK = {
     fish_silverfish = { char = "银", color = {200, 210, 220} },
     fish_gemfish    = { char = "宝", color = {180, 130, 255} },
     fish_octopus    = { char = "章", color = {200,  80, 160} },
+    -- 稀有鱼类
+    fish_swordfish    = { char = "旗", color = { 80, 160, 230} },
+    fish_seahorse     = { char = "马", color = {255, 180,  80} },
+    fish_anglerfish   = { char = "灯", color = { 60,  80, 120} },
+    fish_jellyfish    = { char = "母", color = {220, 150, 255} },
+    fish_viperfish    = { char = "蝰", color = {130,  60, 180} },
+    fish_nautilus     = { char = "螺", color = {255, 180, 120} },
+    fish_dragonfish   = { char = "龙", color = { 80, 200, 120} },
+    fish_glowsquid    = { char = "鱿", color = {100, 120, 255} },
+    fish_abysseel     = { char = "鳗", color = { 40,  60, 100} },
+    fish_phantomray   = { char = "鳐", color = {180, 160, 230} },
+    -- 传说鱼类
+    fish_crystalshrimp = { char = "晶", color = {200, 240, 255} },
+    fish_shadowwhale   = { char = "鲸", color = { 60,  40, 120} },
+    fish_voidcrab      = { char = "蟹", color = {100,  40, 180} },
+    fish_abyssjelly    = { char = "蜇", color = { 80,  60, 160} },
+    fish_goldendragon  = { char = "金", color = {255, 215,  50} },
+    fish_phoenixfish   = { char = "凤", color = {255, 120,  60} },
+    fish_leviathan     = { char = "怪", color = { 40,  80, 160} },
+    fish_moonfish      = { char = "月", color = {220, 230, 255} },
+    fish_stormturtle   = { char = "龟", color = { 80, 200, 160} },
+    fish_cosmicwhale   = { char = "宙", color = { 60,  80, 200} },
 
     -- UI 图标
     coin            = { char = "币", color = {255, 215,  50} },

@@ -7,6 +7,7 @@ local GameState       = require("state.GameState")
 local ResearchSystem  = require("systems.ResearchSystem")
 local WaterRenderer   = require("ui.WaterRenderer")
 local FormatUtils     = require("utils.FormatUtils")
+local UICore          = require("ui.UICore")
 
 local ResearchScene = {}
 
@@ -120,19 +121,36 @@ function ResearchScene.render(nvg, x, y, w, h)
 
     -- 5) Toast
     if toastTimer_ > 0 then
-        local alpha = math.min(1, toastTimer_ * 2) * 220
+        local sc = w / 390
+        sc = math.max(0.7, math.min(1.5, sc))
+        local alpha = math.min(1, toastTimer_ * 2)
+        local tx = x + w * 0.5
+        local ty = y + h * 0.42
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 16)
+        nvgFontSize(nvg, math.floor(15 * sc))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         local tw = nvgTextBounds(nvg, 0, 0, toastMsg_)
-        local tx = x + w * 0.5
-        local ty = y + h * 0.4
+        local pw = tw + math.floor(40 * sc)
+        local ph = math.floor(38 * sc)
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, alpha)
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx - tw * 0.5 - 16, ty - 14, tw + 32, 28, 14)
-        nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(alpha * 0.7)))
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgFillColor(nvg, nvgRGBA(8, 38, 82, 220))
         nvgFill(nvg)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, math.floor(alpha)))
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 180))
+        nvgStrokeWidth(nvg, 1.5)
+        nvgStroke(nvg)
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            nvgText(nvg, tx + math.cos(a) * 1.5, ty + math.sin(a) * 1.5, toastMsg_)
+        end
+        nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
         nvgText(nvg, tx, ty, toastMsg_)
+        nvgRestore(nvg)
     end
 end
 
@@ -141,46 +159,82 @@ end
 -- ============================================================================
 
 function ResearchScene.renderHUD(nvg, x, y, w, h)
-    -- 半透明顶栏背景
+    local sc = w / 390
+    sc = math.max(0.7, math.min(1.5, sc))
+    local hudH = 46
+    local midY = y + hudH * 0.5
+
+    -- HUD 渐变背景
+    local bgPaint = nvgLinearGradient(nvg, x, y, x, y + hudH,
+        nvgRGBA(10, 50, 105, 235), nvgRGBA(6, 36, 80, 240))
     nvgBeginPath(nvg)
-    nvgRect(nvg, x, y, w, 44)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 100))
+    nvgRect(nvg, x, y, w, hudH)
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
+    -- 底部高光线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, x, y + hudH)
+    nvgLineTo(nvg, x + w, y + hudH)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 70))
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
 
     -- 返回按钮
-    local btnW = 56
-    local btnH = 26
-    local btnX = x + 8
-    local btnY = y + 9
-
+    local btnW = math.floor(64 * sc)
+    local btnH = math.floor(30 * sc)
+    local btnX = x + math.floor(10 * sc)
+    local btnY = midY - btnH * 0.5
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 8)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgFillColor(nvg, nvgRGBA(20, 80, 160, 200))
     nvgFill(nvg)
-
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 160))
+    nvgStrokeWidth(nvg, 1.5)
+    nvgStroke(nvg)
     nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
+    nvgFontSize(nvg, math.floor(12 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "← 返回")
+    local bCX = btnX + btnW * 0.5
+    local bCY = btnY + btnH * 0.5
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, bCX + math.cos(a) * 1.5, bCY + math.sin(a) * 1.5, "← 返回")
+    end
+    nvgFillColor(nvg, nvgRGBA(200, 235, 255, 240))
+    nvgText(nvg, bCX, bCY, "← 返回")
 
     table.insert(clickRects_, {
         x = btnX, y = btnY, w = btnW, h = btnH,
         action = "go_back",
     })
 
-    -- 标题
-    nvgFontSize(nvg, 17)
+    -- 标题（8方向描边）
+    nvgFontSize(nvg, math.floor(17 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "研发中心")
+    local titleX = x + w * 0.5
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 220))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, titleX + math.cos(a) * 2, midY + math.sin(a) * 2, "研发中心")
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
+    nvgText(nvg, titleX, midY, "研发中心")
 
-    -- 金币
-    nvgFontSize(nvg, 12)
+    -- 金币（右对齐，金色描边）
+    local coinsStr = "💰 " .. FormatUtils.formatNumber(GameState.coins)
+    local coinsX = x + w - math.floor(10 * sc)
+    nvgFontSize(nvg, math.floor(12 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
-    nvgText(nvg, x + w - 10, btnY + btnH * 0.5,
-        FormatUtils.formatNumber(GameState.coins) .. " 金币")
+    nvgFillColor(nvg, nvgRGBA(80, 40, 0, 200))
+    for i = 0, 4 do
+        local a = i * 2 * math.pi / 5
+        nvgText(nvg, coinsX + math.cos(a) * 1.5, midY + math.sin(a) * 1.5, coinsStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(255, 228, 50, 240))
+    nvgText(nvg, coinsX, midY, coinsStr)
 end
 
 -- ============================================================================
@@ -218,16 +272,24 @@ function ResearchScene.renderTabBar(nvg, x, y, w, h)
             nvgFill(nvg)
         end
 
-        -- 标签文字 (icon + 名称)
+        -- 标签文字 (icon + 名称, 6方向描边)
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 12)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        if isSelected then
-            nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
-        else
-            nvgFillColor(nvg, nvgRGBA(180, 200, 220, 180))
+        local tabCX = tx + tabW * 0.5
+        local tabCY = ty + th * 0.5
+        local tabLabel = cat.icon .. " " .. cat.displayName
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+        for si = 0, 5 do
+            local a = si * math.pi / 3
+            nvgText(nvg, tabCX + math.cos(a) * 1.5, tabCY + math.sin(a) * 1.5, tabLabel)
         end
-        nvgText(nvg, tx + tabW * 0.5, ty + th * 0.45, cat.icon .. " " .. cat.displayName)
+        if isSelected then
+            nvgFillColor(nvg, nvgRGBA(235, 250, 255, 255))
+        else
+            nvgFillColor(nvg, nvgRGBA(160, 200, 230, 200))
+        end
+        nvgText(nvg, tabCX, tabCY, tabLabel)
 
         -- 点击区域
         table.insert(clickRects_, {
@@ -347,16 +409,22 @@ function ResearchScene.renderCard(nvg, cx, cy, cw, ch, research)
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 230))
     nvgText(nvg, iconX + 16, iconY + 16, research.icon)
 
-    -- 名称
+    -- 名称（6方向描边）
     local nameX = iconX + 40
     nvgFontSize(nvg, 14)
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    if isMax then
-        nvgFillColor(nvg, nvgRGBA(100, 230, 140, 240))
-    else
-        nvgFillColor(nvg, nvgRGBA(220, 235, 255, 230))
+    local nameDrawY = cy + 12
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, nameX + math.cos(a) * 1.5, nameDrawY + math.sin(a) * 1.5, research.displayName)
     end
-    nvgText(nvg, nameX, cy + 12, research.displayName)
+    if isMax then
+        nvgFillColor(nvg, nvgRGBA(100, 235, 145, 255))
+    else
+        nvgFillColor(nvg, nvgRGBA(220, 238, 255, 240))
+    end
+    nvgText(nvg, nameX, nameDrawY, research.displayName)
 
     -- 等级标签
     nvgFontSize(nvg, 11)

@@ -21,6 +21,7 @@ local BossSystem      = require("systems.BossSystem")
 local ComboSystem     = require("systems.ComboSystem")
 local RareFishSystem  = require("systems.RareFishSystem")
 local UIAtlas         = require("ui.UIAtlas")
+local UICore          = require("ui.UICore")
 local GameConfig      = require("config.GameConfig")
 local GameState       = require("state.GameState")
 local EconomySystem   = require("systems.EconomySystem")
@@ -36,6 +37,14 @@ local imgCaustic_    = nil
 local imgFishSheet_  = nil
 local imgBoatBase_   = nil
 local imgBoatShadow_ = nil
+-- ===== 新增水体分层贴图 =====
+local imgSeabed_     = nil   -- 海底贴图 (image/seabed_nearshore.png)
+local seabedW_       = 0
+local seabedH_       = 0
+local imgFishShadow_ = nil   -- 专用鱼影贴图 (Textures/fish_shadow_s.png)
+local fishShadowW_   = 0
+local fishShadowH_   = 0
+local imgSunGlitter_ = nil   -- 阳光散射遮罩 (Textures/sun_glitter_mask.png)
 local imgBoatWake_   = nil
 local imgBucket_     = nil
 local imgDock_       = nil
@@ -58,6 +67,7 @@ local boatUpgBtnRect_  = { x = 0, y = 0, w = 0, h = 0 }  -- 按钮点击区域
 
 -- 升级弹窗
 local showBoatUpgradePopup_ = false
+local boatUpgradePopupT_    = 0   -- 动画进度 0→1
 local boatUpgCloseRect_     = { x = 0, y = 0, w = 0, h = 0 }
 local boatUpgConfirmRect_   = { x = 0, y = 0, w = 0, h = 0 }  -- 渔船升级按钮
 local equipUpgRects_        = {}  -- { [equipId] = {x,y,w,h} } 装备升级按钮区域
@@ -79,6 +89,7 @@ local affixPopupData_       = nil    -- { fishName, displayName, affixes, summar
 
 -- ========== 鱼饵选择器 (模态弹窗) ==========
 local showBaitSelector_     = false
+local baitSelectorT_        = 0   -- 动画进度 0→1
 local baitCloseRect_        = { x = 0, y = 0, w = 0, h = 0 }
 local baitItemRects_        = {}     -- { [baitId] = {x,y,w,h} }
 local baitBtnRect_          = { x = 0, y = 0, w = 0, h = 0 }  -- 底部鱼饵按钮区域
@@ -336,6 +347,30 @@ function WaterScene.init(nvg)
             boatBaseW_ = 512
             boatBaseH_ = 1070
         end
+    end
+
+    -- ===== 海底贴图 (水体分层背景) =====
+    imgSeabed_ = nvgCreateImage(nvg, "image/seabed_nearshore.png", 0)
+    if imgSeabed_ and imgSeabed_ > 0 then
+        seabedW_, seabedH_ = nvgImageSize(nvg, imgSeabed_)
+        if seabedW_ < 32 or seabedH_ < 32 then seabedW_ = 941; seabedH_ = 1672 end
+        print("[WaterScene] seabed: " .. seabedW_ .. "x" .. seabedH_)
+    else
+        print("[WaterScene] WARNING: seabed image not found, using gradient fallback")
+    end
+
+    -- 专用鱼影贴图
+    imgFishShadow_ = nvgCreateImage(nvg, "Textures/fish_shadow_s.png", 0)
+    if imgFishShadow_ and imgFishShadow_ > 0 then
+        fishShadowW_, fishShadowH_ = nvgImageSize(nvg, imgFishShadow_)
+        if fishShadowW_ < 16 or fishShadowH_ < 16 then fishShadowW_ = 256; fishShadowH_ = 128 end
+        print("[WaterScene] fish shadow: " .. fishShadowW_ .. "x" .. fishShadowH_)
+    end
+
+    -- 阳光散射遮罩
+    imgSunGlitter_ = nvgCreateImage(nvg, "Textures/sun_glitter_mask.png", 0)
+    if imgSunGlitter_ and imgSunGlitter_ > 0 then
+        print("[WaterScene] sun glitter mask loaded")
     end
 
     -- 船底阴影
@@ -777,6 +812,19 @@ function WaterScene.update(dt)
         end
     end
 
+    -- ---- 模态弹窗缩放动画 ----
+    local POPUP_ANIM_SPEED = 1.0 / 0.25  -- 0.25s 完成
+    if showBoatUpgradePopup_ then
+        boatUpgradePopupT_ = math.min(1.0, boatUpgradePopupT_ + dt * POPUP_ANIM_SPEED)
+    else
+        boatUpgradePopupT_ = 0
+    end
+    if showBaitSelector_ then
+        baitSelectorT_ = math.min(1.0, baitSelectorT_ + dt * POPUP_ANIM_SPEED)
+    else
+        baitSelectorT_ = 0
+    end
+
 end
 
 -- ============================================================================
@@ -788,24 +836,39 @@ function WaterScene.render(nvg, x, y, w, h)
 
     updateBoatState(x, y, w, h)
 
-    -- 1. water_base
-    WaterScene.renderBase(nvg, x, y, w, h)
-    -- 2. caustic
-    WaterScene.renderCaustic(nvg, x, y, w, h)
-    -- 3. fish_shadow
+    -- ── 水下底层 ──────────────────────────────────────────────────
+    -- 0.0 seabed (海底贴图 cover fill, 静态)
+    WaterScene.renderSeabed(nvg, x, y, w, h)
+    -- 0.1 fish_shadow (水下鱼影, 必须在水色罩之前)
     WaterScene.renderFishShadows(nvg, x, y, w, h)
-    -- 3.1 storm_overlay (暴风雨暗幕, 鱼影之上)
-    BossSystem.renderStormOverlay(nvg, x, y, w, h)
-    -- 3.2 boss_shadow (鱼王阴影 + HP条)
-    BossSystem.renderBoss(nvg, x, y, w, h, imgFishSheet_, fishSheetW_, fishSheetH_, time_)
-    -- 3.3 rare_fish (稀有金色鱼影, 在鱼王之上、水花之下)
+    -- 0.12 rare_fish 水下阴影 (在水色罩之前)
     RareFishSystem.render(nvg, x, y, w, h, time_)
-    -- 3.5 catch_ripple (捕获水花波纹, 在鱼影上方)
+    -- 0.14 boss 水下鱼王阴影 (在水色罩之前; HP条由 renderBossHP 单独绘制到 UI 层)
+    BossSystem.renderBoss(nvg, x, y, w, h, imgFishSheet_, fishSheetW_, fishSheetH_, time_)
+
+    -- ── 水体覆盖层 ────────────────────────────────────────────────
+    -- 0.2 water_tint (蓝绿水色罩 + 右上光雾)
+    WaterScene.renderWaterTint(nvg, x, y, w, h)
+    -- 0.3 depth_overlay (浅海/深海色彩叠加)
+    WaterScene.renderDepthOverlay(nvg, x, y, w, h)
+    -- 0.4 surface_flow (双层低alpha滚动水纹)
+    WaterScene.renderSurfaceFlow(nvg, x, y, w, h)
+    -- 0.6 caustic (焦散高光 additive)
+    WaterScene.renderCaustic(nvg, x, y, w, h)
+
+    -- ── 水面层 ────────────────────────────────────────────────────
+    -- 0.75 sun_sparkles (右上阳光碎闪 additive)
+    WaterScene.renderSunSparkles(nvg, x, y, w, h)
+    -- 0.8 catch_ripple (捕获水花波纹)
     CatchAnimSystem.renderRipples(nvg)
-    -- 4. ripples (水面涟漪圆环, 在船影下方)
+    -- 0.9 ripples (普通水面涟漪圆环)
     WaterScene.renderRipples(nvg, x, y, w, h)
-    -- 4.5 line_ripples (鱼线落水波纹, 在船影下方)
+    -- 1.0 line_ripples (鱼线落水波纹)
     WaterScene.renderLineRipples(nvg, x, y, w, h)
+    -- 1.1 boat_wake_ring (船周围环形水波)
+    WaterScene.renderBoatWakeRing(nvg, x, y, w, h)
+
+    -- ── 船体层 ────────────────────────────────────────────────────
     -- 5. boat_shadow
     WaterScene.renderBoatShadow(nvg, x, y, w, h)
     -- 7. boat_base (船体最上层)
@@ -830,6 +893,8 @@ function WaterScene.render(nvg, x, y, w, h)
     WaterScene.renderDock(nvg, x, y, w, h)
     -- 7.85 seagulls (海鸥飞行, 在码头上方、UI 下方)
     WaterScene.renderSeagulls(nvg, x, y, w, h)
+    -- 7.88 storm overlay (暴风雨全屏压暗, 在雨滴之下)
+    BossSystem.renderStormOverlay(nvg, x, y, w, h)
     -- 7.9 rain (暴风雨雨滴粒子, 在 UI 之下)
     BossSystem.renderRain(nvg, x, y, w, h)
     -- 7.95 lightning flash (闪电闪屏, 在雨滴之上)
@@ -854,6 +919,237 @@ function WaterScene.render(nvg, x, y, w, h)
     WaterScene.renderNewFishPopup(nvg, x, y, w, h)
     -- 9.6 词条 toast
     WaterScene.renderAffixPopup(nvg, x, y, w, h)
+end
+
+-- ============================================================================
+-- Layer 0: Seabed — 海底静态贴图 (cover fill)
+-- ============================================================================
+
+function WaterScene.renderSeabed(nvg, x, y, w, h)
+    if imgSeabed_ and imgSeabed_ > 0 and seabedW_ > 0 and seabedH_ > 0 then
+        -- cover fill: 等比缩放覆盖全屏, 居中裁切
+        local scale  = math.max(w / seabedW_, h / seabedH_)
+        local drawW  = seabedW_ * scale
+        local drawH  = seabedH_ * scale
+        local drawX  = x + (w - drawW) * 0.5
+        local drawY  = y + (h - drawH) * 0.5
+        local pat = nvgImagePattern(nvg, drawX, drawY, drawW, drawH, 0, imgSeabed_, 1.0)
+        nvgBeginPath(nvg)
+        nvgRect(nvg, x, y, w, h)
+        nvgFillPaint(nvg, pat)
+        nvgFill(nvg)
+    else
+        -- 降级: 深蓝渐变
+        local grad = nvgLinearGradient(nvg, x, y, x, y + h,
+            nvgRGBA(8, 60, 110, 255), nvgRGBA(4, 35, 70, 255))
+        nvgBeginPath(nvg)
+        nvgRect(nvg, x, y, w, h)
+        nvgFillPaint(nvg, grad)
+        nvgFill(nvg)
+    end
+end
+
+-- ============================================================================
+-- Layer 0.2: WaterTint — 蓝绿半透叠色 + 右上阳光高光
+-- ============================================================================
+
+function WaterScene.renderWaterTint(nvg, x, y, w, h)
+    -- 全局轻微提亮蓝层
+    local base = nvgLinearGradient(nvg, x, y, x, y + h,
+        nvgRGBA(80, 220, 245, 16), nvgRGBA(75, 215, 238, 16))
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, base)
+    nvgFill(nvg)
+
+    -- 主色调: 亮蓝(顶) → 干净浅海蓝绿(底)
+    local grad = nvgLinearGradient(nvg, x, y, x, y + h,
+        nvgRGBA(58, 210, 248, 36), nvgRGBA(78, 223, 212, 46))
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, grad)
+    nvgFill(nvg)
+
+    -- 右上角阳光薄雾 #CFE8FF = rgb(207,232,255), alpha 60
+    local hlX = x + w * 0.80
+    local hlY = y + h * 0.05
+    local hlR = math.min(w, h) * 0.65
+    local hl = nvgRadialGradient(nvg, hlX, hlY, hlR * 0.03, hlR,
+        nvgRGBA(207, 232, 255, 60), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, hl)
+    nvgFill(nvg)
+end
+
+-- ============================================================================
+-- Layer 0.4: SurfaceFlow — 双层低 alpha 滚动水纹 (替代原 renderBase 滚动层)
+-- ============================================================================
+
+function WaterScene.renderSurfaceFlow(nvg, x, y, w, h)
+    if not imgBaseTile_ or imgBaseTile_ <= 0 then return end
+
+    local minDim = math.min(w, h)
+
+    nvgSave(nvg)
+    nvgGlobalCompositeBlendFunc(nvg, NVG_SRC_ALPHA, NVG_ONE_MINUS_SRC_ALPHA)
+
+    -- 第1层: 较大tile, 向右下漂移, alpha 0.09
+    local tile1 = minDim / 0.45
+    local f1x =  0.005 * tile1 * time_
+    local f1y =  0.010 * tile1 * time_
+    local pat1 = nvgImagePattern(nvg, x + f1x, y + f1y, tile1, tile1, 0, imgBaseTile_, 1.0)
+    nvgGlobalAlpha(nvg, 0.09)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, pat1)
+    nvgFill(nvg)
+
+    -- 第2层: 较小tile, 反向漂移, alpha 0.04
+    local tile2 = minDim / 0.70
+    local f2x = -0.003 * tile2 * time_
+    local f2y =  0.007 * tile2 * time_
+    local pat2 = nvgImagePattern(nvg, x + f2x, y + f2y, tile2, tile2, 0, imgBaseTile_, 1.0)
+    nvgGlobalAlpha(nvg, 0.04)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, pat2)
+    nvgFill(nvg)
+
+    nvgRestore(nvg)
+end
+
+-- ============================================================================
+-- Layer 0.6: DepthOverlay — 多点辐射渐变模拟深浅变化
+-- ============================================================================
+
+function WaterScene.renderDepthOverlay(nvg, x, y, w, h)
+    -- g1: 左下浅海区 — 扩大加强, 热带浅海亮青绿
+    local r1 = w * 0.80
+    local g1 = nvgRadialGradient(nvg, x + w * 0.18, y + h * 0.76, r1 * 0.04, r1,
+        nvgRGBA(96, 235, 215, 84), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, g1); nvgFill(nvg)
+
+    -- g2: 船周围局部清透亮区
+    local r2 = w * 0.24
+    local g2 = nvgRadialGradient(nvg, x + w * 0.50, y + h * 0.60, r2 * 0.04, r2,
+        nvgRGBA(90, 228, 240, 26), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, g2); nvgFill(nvg)
+
+    -- g3: 中部深水层次 (极轻)
+    local r3 = math.min(w, h) * 0.38
+    local g3 = nvgRadialGradient(nvg, x + w * 0.50, y + h * 0.60, r3 * 0.05, r3,
+        nvgRGBA(0, 120, 190, 11), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, g3); nvgFill(nvg)
+
+    -- g4: 右侧深水层次 (极轻)
+    local r4 = math.min(w, h) * 0.32
+    local g4 = nvgRadialGradient(nvg, x + w * 0.80, y + h * 0.52, r4 * 0.06, r4,
+        nvgRGBA(0, 145, 210, 13), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, g4); nvgFill(nvg)
+end
+
+-- ============================================================================
+-- Layer 2.5: SunSparkles — 右上区域阳光闪光点 (加法混合)
+-- ============================================================================
+
+-- 预生成 160 条碎光的静态数据 (避免每帧构建 table)
+local sunSparkleData_ = nil
+local function buildSunSparkleData()
+    if sunSparkleData_ then return end
+    -- 使用线性同余伪随机, 保证每次相同
+    local function lcg(s) return (s * 1664525 + 1013904223) % (2^32) end
+    local seed = 42
+    local data = {}
+    -- 分三段密度: 右上角极密(0.55-1.0 x, 0.0-0.25 y) x120条
+    --              中右(0.40-0.80 x, 0.15-0.40 y) x30条
+    --              散落(0.30-0.70 x, 0.25-0.50 y) x10条
+    local regions = {
+        { n=120, x0=0.52, x1=1.00, y0=0.00, y1=0.28 },
+        { n= 30, x0=0.38, x1=0.82, y0=0.18, y1=0.42 },
+        { n= 10, x0=0.28, x1=0.68, y0=0.28, y1=0.50 },
+    }
+    for _, reg in ipairs(regions) do
+        for _ = 1, reg.n do
+            seed = lcg(seed)
+            local rx = reg.x0 + (seed / (2^32)) * (reg.x1 - reg.x0)
+            seed = lcg(seed)
+            local ry = reg.y0 + (seed / (2^32)) * (reg.y1 - reg.y0)
+            seed = lcg(seed)
+            local sp = seed / (2^32) * 12.0   -- phase seed 0~12
+            seed = lcg(seed)
+            -- 线段长: 右上角越长 (rx+ry 越大越亮区)
+            local lenBase = 4.0 + (seed / (2^32)) * 6.0
+            seed = lcg(seed)
+            -- 微小倾斜角 (-8~8度 radians)
+            local tilt = ((seed / (2^32)) - 0.5) * 0.28
+            -- 颜色变体: 冷白(#CFE8FF) 或 暖金(#FFE8CC)
+            seed = lcg(seed)
+            local colVar = (seed / (2^32)) > 0.55 and 1 or 2
+            data[#data + 1] = { rx=rx, ry=ry, sp=sp, lenBase=lenBase, tilt=tilt, colVar=colVar }
+        end
+    end
+    sunSparkleData_ = data
+end
+
+function WaterScene.renderSunSparkles(nvg, x, y, w, h)
+    buildSunSparkleData()
+
+    nvgSave(nvg)
+    nvgGlobalCompositeBlendFunc(nvg, NVG_SRC_ALPHA, NVG_ONE)
+
+    local t = time_
+    for _, sp in ipairs(sunSparkleData_) do
+        local sx = x + sp.rx * w
+        local sy = y + sp.ry * h
+
+        -- 闪烁 alpha: 0.10 ~ 0.55, 各自独立节奏
+        local flicker = 0.32 + 0.23 * math.sin(t * 1.9 + sp.sp * 4.1)
+                              + 0.05 * math.sin(t * 3.7 + sp.sp * 2.3)
+        flicker = math.max(0.02, flicker)
+
+        -- 水平短线长度随闪烁变化
+        local lineLen = sp.lenBase * (0.7 + 0.3 * math.sin(t * 1.3 + sp.sp * 1.7))
+        lineLen = math.max(1.5, lineLen)
+
+        -- 颜色: 冷白 #CFE8FF(207,232,255) / 暖金 #FFE8CC(255,232,204)
+        local r, g, b
+        if sp.colVar == 1 then r, g, b = 207, 232, 255
+        else                   r, g, b = 255, 232, 204 end
+
+        -- 线宽: 靠近右上角越细越密
+        local lw = 0.55 + 0.35 * (1.0 - sp.rx * 0.5)
+
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, flicker)
+        nvgTranslate(nvg, sx, sy)
+        nvgRotate(nvg, sp.tilt)
+
+        nvgStrokeColor(nvg, nvgRGBA(r, g, b, 230))
+        nvgStrokeWidth(nvg, lw)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, -lineLen, 0)
+        nvgLineTo(nvg,  lineLen, 0)
+        nvgStroke(nvg)
+
+        -- 极短垂直点缀线 (1/4 长), 增加闪光感
+        if lineLen > 4.0 then
+            local vLen = lineLen * 0.28
+            nvgStrokeColor(nvg, nvgRGBA(r, g, b, 140))
+            nvgStrokeWidth(nvg, lw * 0.7)
+            nvgBeginPath(nvg)
+            nvgMoveTo(nvg, 0, -vLen); nvgLineTo(nvg, 0, vLen)
+            nvgStroke(nvg)
+        end
+
+        nvgRestore(nvg)
+    end
+
+    nvgRestore(nvg)
 end
 
 -- ============================================================================
@@ -924,10 +1220,10 @@ function WaterScene.renderCaustic(nvg, x, y, w, h)
     if not imgCaustic_ or imgCaustic_ <= 0 then return end
 
     local minDim = math.min(w, h)
-    local tileC1 = minDim / 1.8
+    local tileC1 = minDim / 1.35   -- 原 1.8, 调大 tile 让光斑更疏朗
     local flowC1X = -0.008 * tileC1 * time_
     local flowC1Y =  0.005 * tileC1 * time_
-    local tileC2 = minDim / 2.5
+    local tileC2 = minDim / 2.0    -- 原 2.5, 第二层缩小
     local flowC2X =  0.006 * tileC2 * time_
     local flowC2Y = -0.007 * tileC2 * time_
 
@@ -938,7 +1234,7 @@ function WaterScene.renderCaustic(nvg, x, y, w, h)
 
     nvgSave(nvg)
     nvgGlobalCompositeBlendFunc(nvg, NVG_SRC_ALPHA, NVG_ONE)
-    nvgGlobalAlpha(nvg, 0.15)
+    nvgGlobalAlpha(nvg, 0.26)   -- 原 0.22, 提升可见度
 
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
@@ -960,86 +1256,161 @@ end
 function WaterScene.renderFishShadows(nvg, x, y, w, h)
     if not imgFishSheet_ or imgFishSheet_ <= 0 or fishSheetW_ == 0 then return end
 
-    -- atlas 布局: 4列 × 4行 = 4种鱼 × 每种4帧游泳动画 (鱼头朝左)
-    -- 行: variant (1=小鱼, 2=鲳鱼, 3=剑鱼A, 4=剑鱼B)
-    -- 列: 动画帧 (0,1,2,3)
-    local cols, rows = 4, 4
-    local cellW = fishSheetW_ / cols
-    local cellH = fishSheetH_ / rows
-
-    -- ping-pong 序列: 0,1,2,3,2,1 (6步一循环, 无跳变)
-    local pingPong = { 0, 1, 2, 3, 2, 1 }
-    local pingPongLen = #pingPong
-
-    -- 帧动画参数
-    local animFps = 2     -- 每秒 2 帧, 缓慢柔和摆尾
-
     local allFish = FishSwarmSystem.getAllFish()
+    if #allFish == 0 then return end
+
+    -- atlas 布局: 4列 × 4行
+    -- 朝向: 第1排鱼头朝左, 第2~4排鱼头朝右
+    local cols, rows  = 4, 4
+    local cellW       = fishSheetW_ / cols
+    local cellH       = fishSheetH_ / rows
+    -- ping-pong: 0,1,2,3,2,1 (6步无跳变)
+    local pingPong    = { 0, 1, 2, 3, 2, 1 }
+    local pingPongLen = #pingPong
+    local animFps     = 2
 
     for _, f in ipairs(allFish) do
         local fx = x + f.x * w
         local fy = y + f.y * h
-        local s = f.size
-        local t = time_ + f.phase
-        local fishAlpha = f.alpha or 0.35
+        local s  = f.size
+        local t  = time_ + f.phase
+        -- alpha 控制在 0.12~0.22 范围, 避免鱼影过浓遮挡海底
+        local fishAlpha = math.min(0.22, math.max(0.12, f.alpha or 0.18))
 
-        -- 跳过屏幕外的鱼 (性能优化)
         if fx < x - s or fx > x + w + s or fy < y - s or fy > y + h + s then
-            goto continue
+            goto continue_shadow
         end
 
-        -- 水面折射扭曲 (波次鱼减弱, 它们移动更快)
-        local distortMult = f.isWave and 0.5 or 1.0
-        local distortStrength = math.min(w, h) * 0.012 * distortMult
-        local distX = math.sin(t * 1.2 + f.phase * 2.0) * distortStrength
-                    + math.sin(t * 2.5 + f.phase * 1.3) * distortStrength * 0.4
-        local distY = math.cos(t * 1.0 + f.phase * 1.7) * distortStrength * 0.6
-                    + math.cos(t * 2.1 + f.phase * 0.8) * distortStrength * 0.3
+        -- 低频折射扭曲 (降低频率避免抖动感)
+        local distortMult = f.isWave and 0.4 or 0.7
+        local distortStr  = math.min(w, h) * 0.009 * distortMult
+        local distX = math.sin(t * 0.65 + f.phase * 1.8) * distortStr
+                    + math.sin(t * 1.30 + f.phase * 0.9) * distortStr * 0.4
+        local distY = math.cos(t * 0.55 + f.phase * 1.5) * distortStr * 0.6
+                    + math.cos(t * 1.10 + f.phase * 0.7) * distortStr * 0.25
 
-        -- 波次鱼个体抖动
         if f.isWave and f.jitterAmp then
             distX = distX + math.sin(t * 2.0 + f.jitterPhase) * f.jitterAmp * w
             distY = distY + math.cos(t * 1.7 + f.jitterPhase) * f.jitterAmp * h * 0.5
         end
 
-        local warp = math.sin(t * 1.5) * 0.03
-        local scaleWarp = 1.0 + math.sin(t * 0.8) * 0.04
-
-        -- 根据速度方向计算倾斜角度，让鱼面朝运动方向
-        local fvx = f.vx or 0
-        local fvy = f.vy or 0
+        -- 非均匀缩放 + 旋转扭曲 (小幅度化)
+        local scaleX  = 1.0 + math.sin(t * 0.65 + f.phase) * 0.05
+        local scaleY  = 1.0 + math.cos(t * 0.50 + f.phase) * 0.04
+        local rotWarp = math.sin(t * 0.80 + f.phase * 0.6) * 0.025
+        local fvx = f.vx or 0; local fvy = f.vy or 0
         local tilt = math.atan(fvy, math.abs(fvx) + 0.0001)
 
-        -- 帧动画: ping-pong 循环, 避免首尾跳变
-        local ppIdx = math.floor(t * animFps) % pingPongLen + 1  -- Lua 1-based
-        local col = pingPong[ppIdx]          -- 动画帧列 (0~3)
-        local row = (f.variant or 1) - 1     -- 鱼种行 (0~3)
-
+        local ppIdx = math.floor(t * animFps) % pingPongLen + 1
+        local col   = pingPong[ppIdx]
+        local row   = (f.variant or 1) - 1
         local scale = s / cellW
         local drawH = cellH * scale
 
-        nvgSave(nvg)
-        nvgGlobalAlpha(nvg, fishAlpha)
-        nvgTranslate(nvg, fx + distX, fy + distY)
-        nvgRotate(nvg, warp + tilt * f.dir)
-        -- atlas方向修正: 第1行鱼朝左, 第2~4行鱼朝右, 需要额外翻转
+        -- 朝向修正: 第1排朝左(atlasFlip=1), 第2~4排朝右(atlasFlip=-1)
+        -- nvgScale X = -f.dir * atlasFlip * scaleX
+        -- dir=1(右行): 第1排 X=-1(翻转对齐), 第2-4排 X=1(原向)
         local atlasFlip = (f.variant == 1) and 1 or -1
-        nvgScale(nvg, -f.dir * atlasFlip * scaleWarp, scaleWarp)
 
-        local pat = nvgImagePattern(nvg,
+        -- ── pass1: 主阴影 ─────────────────────────────────────────────────
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, fishAlpha * 0.75)
+        nvgTranslate(nvg, fx + distX, fy + distY)
+        nvgRotate(nvg, rotWarp + tilt * f.dir)
+        nvgScale(nvg, -f.dir * atlasFlip * scaleX, scaleY)
+
+        local pat1 = nvgImagePattern(nvg,
             -col * cellW * scale - s * 0.5,
             -row * cellH * scale - drawH * 0.5,
             fishSheetW_ * scale, fishSheetH_ * scale,
             0, imgFishSheet_, 1.0)
-
         nvgBeginPath(nvg)
         nvgRect(nvg, -s * 0.5, -drawH * 0.5, s, drawH)
-        nvgFillPaint(nvg, pat)
+        nvgFillPaint(nvg, pat1)
         nvgFill(nvg)
         nvgRestore(nvg)
 
-        ::continue::
+        -- ── pass2: 折射副影 (轻微偏移, 1/3 透明度) ────────────────────────
+        local blurOffX = distortStr * 0.55 * math.sin(t * 0.8 + f.phase)
+        local blurOffY = distortStr * 0.35 * math.cos(t * 1.1 + f.phase)
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, fishAlpha * 0.25)
+        nvgTranslate(nvg, fx + distX + blurOffX, fy + distY + blurOffY)
+        nvgRotate(nvg, -rotWarp * 0.5 + tilt * f.dir)
+        nvgScale(nvg, -f.dir * atlasFlip * scaleX * 1.08, scaleY * 0.92)
+
+        local pat2 = nvgImagePattern(nvg,
+            -col * cellW * scale - s * 0.5,
+            -row * cellH * scale - drawH * 0.5,
+            fishSheetW_ * scale, fishSheetH_ * scale,
+            0, imgFishSheet_, 1.0)
+        nvgBeginPath(nvg)
+        nvgRect(nvg, -s * 0.5, -drawH * 0.5, s, drawH)
+        nvgFillPaint(nvg, pat2)
+        nvgFill(nvg)
+        nvgRestore(nvg)
+
+        ::continue_shadow::
     end
+end
+
+-- ============================================================================
+-- Layer 1.1: BoatWakeRing — 船周椭圆形涟漪圈 (冷蓝白, 加法混合)
+-- ============================================================================
+
+function WaterScene.renderBoatWakeRing(nvg, x, y, w, h)
+    local bs = boatState_
+    if not bs then return end
+
+    local cx = bs.cx + (bs.swayX or 0)
+    local cy = bs.cy + (bs.bobY  or 0)
+
+    -- 3 个持续扩散的椭圆环, 错开相位
+    local numRings = 3
+    local ringPeriod = 2.8  -- 每圈循环周期 (秒)
+    local maxRx = w * 0.22  -- 最大水平半径
+    local maxRy = h * 0.06  -- 最大垂直半径 (扁椭圆)
+
+    nvgSave(nvg)
+    nvgGlobalCompositeBlendFunc(nvg, NVG_SRC_ALPHA, NVG_ONE)
+
+    for i = 1, numRings do
+        -- 错开相位, 使三个环匀速循环
+        local phase = ((time_ + (i - 1) * ringPeriod / numRings) % ringPeriod) / ringPeriod
+        -- alpha: 从 0.30 线性衰减到 0, 中间略微抬高
+        local alpha = 0.30 * (1.0 - phase) * math.sin(phase * math.pi)
+        alpha = math.max(0, alpha)
+        if alpha < 0.005 then goto continue_ring end
+
+        local rx = maxRx * (0.25 + 0.75 * phase)  -- 从小到大
+        local ry = maxRy * (0.25 + 0.75 * phase)
+
+        -- 线宽: 扩散时变细
+        local lw = 1.8 * (1.0 - phase * 0.6)
+
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, alpha)
+        nvgTranslate(nvg, cx, cy)
+
+        -- 椭圆描边: 冷蓝白 #D8ECFF(216,236,255)
+        nvgStrokeColor(nvg, nvgRGBA(216, 236, 255, 220))
+        nvgStrokeWidth(nvg, lw)
+        nvgBeginPath(nvg)
+        nvgEllipse(nvg, 0, 0, rx, ry)
+        nvgStroke(nvg)
+
+        -- 外加一条更淡的宽环 (模拟扩散光晕)
+        nvgStrokeColor(nvg, nvgRGBA(207, 232, 255, 80))
+        nvgStrokeWidth(nvg, lw * 2.5)
+        nvgBeginPath(nvg)
+        nvgEllipse(nvg, 0, 0, rx * 1.06, ry * 1.06)
+        nvgStroke(nvg)
+
+        nvgRestore(nvg)
+        ::continue_ring::
+    end
+
+    nvgRestore(nvg)
 end
 
 -- ============================================================================
@@ -1648,7 +2019,7 @@ end
 -- Layer 8: 货币 HUD (左上角)
 -- ============================================================================
 
---- 绘制单个货币条: [图标] 数字文本 [+]
+--- 绘制单个货币条: [图标] 数字文本 [+]  (海洋青蓝风格)
 ---@param nvg userdata
 ---@param bx number    条左上角 x
 ---@param by number    条左上角 y
@@ -1658,25 +2029,19 @@ end
 ---@param text string       格式化后的数字
 ---@param showPlus boolean  是否显示加号(钻石条)
 local function drawCurrencyBar(nvg, bx, by, bw, bh, imgIcon, text, showPlus)
-    -- 底框
-    if imgCurrBg_ and imgCurrBg_ > 0 then
-        local pat = nvgImagePattern(nvg, bx, by, bw, bh, 0, imgCurrBg_, 0.92)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, bx, by, bw, bh, 5)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, bx, by, bw, bh, 5)
-        nvgFillColor(nvg, nvgRGBA(240, 240, 245, 210))
-        nvgFill(nvg)
-    end
+    local r = bh * 0.38
+    -- 深蓝渐变底板
+    UICore.fillRRectGrad(nvg, bx, by, bw, bh, r,
+        { 8, 40, 90 }, 210,
+        { 5, 25, 65 }, 230)
+    -- 青蓝描边
+    UICore.strokeRRect(nvg, bx, by, bw, bh, r, UICore.C_GEM, 1.2, 120)
 
-    local iconSize = bh * 0.75
+    local iconSize = bh * 0.78
     local iconY = by + (bh - iconSize) * 0.5
+    local iconX = bx + 4
 
-    -- 货币图标 (左侧, 在边框内)
-    local iconX = bx + 3
+    -- 货币图标
     if imgIcon and imgIcon > 0 then
         local pat = nvgImagePattern(nvg, iconX, iconY, iconSize, iconSize, 0, imgIcon, 1.0)
         nvgBeginPath(nvg)
@@ -1685,17 +2050,16 @@ local function drawCurrencyBar(nvg, bx, by, bw, bh, imgIcon, text, showPlus)
         nvgFill(nvg)
     end
 
-    -- 数字文本 (图标右侧)
-    local textX = iconX + iconSize + 5
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, bh * 0.52)
-    nvgFillColor(nvg, nvgRGBA(50, 50, 60, 240))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, textX, by + bh * 0.5, text)
+    -- 数字文本（描边白字）
+    local textX = iconX + iconSize + 4
+    local cx = showPlus and (textX + (bx + bw - 18 - textX) * 0.5) or (textX + (bx + bw - textX) * 0.5)
+    UICore.strokeText(nvg, text, cx, by + bh * 0.5,
+        bh * 0.5, UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- 加号按钮 (右侧, 仅钻石条)
     if showPlus and imgPlus_ and imgPlus_ > 0 then
-        local plusSize = bh * 0.7
+        local plusSize = bh * 0.68
         local plusX = bx + bw - plusSize - 2
         local plusY = by + (bh - plusSize) * 0.5
         local pat = nvgImagePattern(nvg, plusX, plusY, plusSize, plusSize, 0, imgPlus_, 1.0)
@@ -1708,22 +2072,21 @@ end
 
 function WaterScene.renderCurrencyHUD(nvg, x, y, w, h)
     local margin = 10
-    local barH = 36
-    local coinBarW = 110
-    local diamondBarW = 110
-    local gap = 10
+    local barH = 38
+    local barW = 118
+    local gap = 8
 
-    local bx = x + margin + 10  -- 留出图标突出空间
+    local bx = x + margin
     local by = y + margin
 
     -- 金币条
     local coinText = FormatUtils.formatNumber(GameState.coins)
-    drawCurrencyBar(nvg, bx, by, coinBarW, barH, imgCoin_, coinText, false)
+    drawCurrencyBar(nvg, bx, by, barW, barH, imgCoin_, coinText, false)
 
     -- 钻石条
-    local dx = bx + coinBarW + gap
+    local dx = bx + barW + gap
     local diamondText = FormatUtils.formatNumber(GameState.diamonds)
-    drawCurrencyBar(nvg, dx, by, diamondBarW, barH, imgDiamond_, diamondText, true)
+    drawCurrencyBar(nvg, dx, by, barW, barH, imgDiamond_, diamondText, true)
 end
 
 -- ============================================================================
@@ -1857,12 +2220,11 @@ function WaterScene.renderCrewList(nvg, x, y, w, h)
             -- end
         end
 
-        -- 名称文字
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, textSize)
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgFillColor(nvg, nvgRGBA(80, 80, 100, 230))
-        nvgText(nvg, cardX + cardW * 0.5, py + portraitSize + 3, crewCfg.displayName)
+        -- 名称文字（描边白字）
+        UICore.strokeText(nvg, crewCfg.displayName,
+            cardX + cardW * 0.5, py + portraitSize + 3 + textSize * 0.5,
+            textSize, UICore.C_TITLE, UICore.C_STROKE, 2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     end
 end
 
@@ -1870,61 +2232,49 @@ end
 -- Layer 8.1: 返航按钮 (右下角)
 -- ============================================================================
 function WaterScene.renderReturnBtn(nvg, x, y, w, h)
-    -- 正方形按钮 (不拉伸底框贴图)
     local btnSize = 58
     local margin = 12
     local btnX = x + w - btnSize - margin
     local btnY = y + h - btnSize - margin
 
-    -- 保存按钮矩形用于点击检测
     returnBtnRect_.x = btnX
     returnBtnRect_.y = btnY
     returnBtnRect_.w = btnSize
     returnBtnRect_.h = btnSize
 
-    -- 1) 底框贴图 (button_square_depth_line.png, 1:1 不拉伸)
-    if imgBtnBase_ and imgBtnBase_ > 0 then
-        local pat = nvgImagePattern(nvg, btnX, btnY, btnSize, btnSize, 0, imgBtnBase_, 0.92)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, btnX, btnY, btnSize, btnSize, 5)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, btnX, btnY, btnSize, btnSize, 5)
-        nvgFillColor(nvg, nvgRGBA(220, 220, 230, 200))
-        nvgFill(nvg)
-    end
+    local r = 12
+    -- 深蓝渐变底板
+    UICore.fillRRectGrad(nvg, btnX, btnY, btnSize, btnSize, r,
+        { 10, 50, 110 }, 220,
+        {  6, 30,  80 }, 240)
+    -- 青蓝描边
+    UICore.strokeRRect(nvg, btnX, btnY, btnSize, btnSize, r, UICore.C_GEM, 1.5, 150)
 
-    -- 2) 图标 + 文字作为整体居中
+    -- 图标 + 文字整体居中
     local iconSize = 22
-    local textH = 12
+    local labelH = 12
     local gap = 2
-    local totalH = iconSize + gap + textH
-    local startY = btnY + (btnSize - totalH) * 0.5 - 3
+    local totalH = iconSize + gap + labelH
+    local startY = btnY + (btnSize - totalH) * 0.5 - 1
     local cx = btnX + btnSize * 0.5
 
-    local iconX = cx - iconSize * 0.5
-    local iconY = startY
     if imgAnchor_ and imgAnchor_ > 0 then
-        local pat = nvgImagePattern(nvg, iconX, iconY, iconSize, iconSize, 0, imgAnchor_, 1.0)
+        local ix = cx - iconSize * 0.5
+        local iy = startY
+        local pat = nvgImagePattern(nvg, ix, iy, iconSize, iconSize, 0, imgAnchor_, 1.0)
         nvgBeginPath(nvg)
-        nvgRect(nvg, iconX, iconY, iconSize, iconSize)
+        nvgRect(nvg, ix, iy, iconSize, iconSize)
         nvgFillPaint(nvg, pat)
         nvgFill(nvg)
     else
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 18)
-        nvgFillColor(nvg, nvgRGBA(80, 80, 100, 220))
-        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-        nvgText(nvg, cx, iconY, "锚")
+        UICore.strokeText(nvg, "⚓", cx, startY + iconSize * 0.5,
+            18, UICore.C_TITLE, UICore.C_STROKE, 2,
+            NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     end
 
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(60, 60, 80, 220))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, cx, iconY + iconSize + gap, "返回")
+    UICore.strokeText(nvg, "返回", cx, startY + iconSize + gap + labelH * 0.5,
+        labelH, UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 end
 
 -- ============================================================================
@@ -1937,22 +2287,14 @@ end
 ---@param size number 按钮尺寸
 ---@param imgIcon any 图标句柄
 local function drawSquareIconBtn(nvg, bx, by, size, imgIcon)
-    -- 底框
-    if imgBtnBase_ and imgBtnBase_ > 0 then
-        local pat = nvgImagePattern(nvg, bx, by, size, size, 0, imgBtnBase_, 0.92)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, bx, by, size, size, 5)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
-    else
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, bx, by, size, size, 5)
-        nvgFillColor(nvg, nvgRGBA(220, 220, 230, 200))
-        nvgFill(nvg)
-    end
+    local r = size * 0.22
+    UICore.fillRRectGrad(nvg, bx, by, size, size, r,
+        { 10, 50, 110 }, 210,
+        {  6, 30,  80 }, 230)
+    UICore.strokeRRect(nvg, bx, by, size, size, r, UICore.C_GEM, 1.2, 120)
     -- 图标居中
     if imgIcon and imgIcon > 0 then
-        local iconSize = size * 0.55
+        local iconSize = size * 0.58
         local ix = bx + (size - iconSize) * 0.5
         local iy = by + (size - iconSize) * 0.5
         local pat = nvgImagePattern(nvg, ix, iy, iconSize, iconSize, 0, imgIcon, 1.0)
@@ -2195,75 +2537,57 @@ function WaterScene.renderBoatUpgradePopup(nvg, x, y, w, h)
     local isBoatMax = (boatLv >= boatCfg.MAX_LEVEL)
     local equipCapLv = GameConfig.getEquipLevelCap(boatLv)
 
+    -- ===== 动画进度 =====
+    local t = UICore.easeOutCubic(boatUpgradePopupT_)
+    local maskAlpha = math.floor(t * 150)
+
     -- 半透明遮罩
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgFillColor(nvg, nvgRGBA(0, 0, 10, maskAlpha))
     nvgFill(nvg)
 
-    -- 弹窗尺寸 (竖长面板)
+    if t <= 0 then return end
+
+    -- 弹窗尺寸
     local popW = math.min(w * 0.88, 320)
     local popH = math.min(h * 0.82, 520)
-    local popX = x + (w - popW) * 0.5
-    local popY = y + (h - popH) * 0.5
+    local popCX = x + w * 0.5
+    local popCY = y + h * 0.5
+    local pad = 12
+
+    -- 缩放动画变换
+    local scale = 0.85 + 0.15 * t
+    nvgGlobalAlpha(nvg, t)
+    nvgSave(nvg)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
+
+    -- 以 (0, 0) 为左上角绘制弹窗
+    local px, py = 0, 0
     local popR = 12
-    local pad = 12  -- 内边距
+    local innerW = popW - pad * 2
 
-    -- ========== 弹窗木纹边框 ==========
-    -- 外框阴影
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, popX - 3, popY - 3, popW + 6, popH + 6, popR + 3)
-    nvgFillColor(nvg, nvgRGBA(80, 50, 20, 100))
-    nvgFill(nvg)
-    -- 木纹边框
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, popX - 2, popY - 2, popW + 4, popH + 4, popR + 2)
-    nvgFillColor(nvg, nvgRGBA(140, 95, 50, 255))
-    nvgFill(nvg)
-    -- 内层米色底板
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, popX, popY, popW, popH, popR)
-    local bgPaint = nvgLinearGradient(nvg, popX, popY, popX, popY + popH,
-        nvgRGBA(252, 248, 235, 255), nvgRGBA(245, 238, 220, 255))
-    nvgFillPaint(nvg, bgPaint)
-    nvgFill(nvg)
+    -- ===== 深海蓝面板 =====
+    UICore.drawPanel(nvg, px, py, popW, popH, popR)
 
-    -- ========== 标题木牌 ==========
-    local titleH = 32
-    local titleW = popW * 0.55
-    local titleX = popX + (popW - titleW) * 0.5
-    local titleY = popY - titleH * 0.35
-    -- 木牌底色
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, titleX, titleY, titleW, titleH, 6)
-    local titlePaint = nvgLinearGradient(nvg, titleX, titleY, titleX, titleY + titleH,
-        nvgRGBA(160, 110, 60, 255), nvgRGBA(130, 85, 45, 255))
-    nvgFillPaint(nvg, titlePaint)
-    nvgFill(nvg)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, titleX, titleY, titleW, titleH, 6)
-    nvgStrokeColor(nvg, nvgRGBA(100, 65, 30, 200))
-    nvgStrokeWidth(nvg, 1.5)
-    nvgStroke(nvg)
-    -- 标题文字
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 18)
-    nvgFillColor(nvg, nvgRGBA(255, 245, 220, 255))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, titleX + titleW * 0.5, titleY + titleH * 0.5, "升级")
+    -- ===== 标题栏 =====
+    local titleBarH = UICore.drawPanelTitle(nvg, px, py, popW, "升级")
 
-    -- ========== 关闭按钮 (右上角 X) ==========
+    -- ===== 关闭按钮 (右上角 X) =====
     local closeSize = 30
-    local closeX = popX + popW - closeSize - 2
-    local closeY = popY + 2
-    boatUpgCloseRect_.x = closeX
-    boatUpgCloseRect_.y = closeY
-    boatUpgCloseRect_.w = closeSize
-    boatUpgCloseRect_.h = closeSize
-    -- X 圆形底色
+    local closeX = px + popW - closeSize - 2
+    local closeY = py + 2
+    -- 存储实际屏幕坐标 (变换后)
+    boatUpgCloseRect_.x = popCX + (closeX - popW * 0.5) * scale
+    boatUpgCloseRect_.y = popCY + (closeY - popH * 0.5) * scale
+    boatUpgCloseRect_.w = closeSize * scale
+    boatUpgCloseRect_.h = closeSize * scale
+    -- X 圆形
     nvgBeginPath(nvg)
     nvgCircle(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, closeSize * 0.42)
-    nvgFillColor(nvg, nvgRGBA(200, 80, 50, 230))
+    nvgFillColor(nvg, nvgRGBA(200, 70, 50, 230))
     nvgFill(nvg)
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 16)
@@ -2271,141 +2595,116 @@ function WaterScene.renderBoatUpgradePopup(nvg, x, y, w, h)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgText(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, "✕")
 
-    -- ========== 区域1: 渔船等级 ==========
-    local secY = popY + pad + 6
-    local innerW = popW - pad * 2
+    -- ===== 区域1: 渔船等级卡片 =====
+    local secY = py + titleBarH + 4
     local boatCardH = 90
-    local boatCardX = popX + pad
+    local boatCardX = px + pad
     local boatCardY = secY
 
-    -- 渔船卡片底色
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, boatCardX, boatCardY, innerW, boatCardH, 8)
-    nvgFillColor(nvg, nvgRGBA(255, 252, 240, 255))
-    nvgFill(nvg)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, boatCardX, boatCardY, innerW, boatCardH, 8)
-    nvgStrokeColor(nvg, nvgRGBA(200, 185, 155, 150))
-    nvgStrokeWidth(nvg, 1)
-    nvgStroke(nvg)
+    UICore.fillRRectGrad(nvg, boatCardX, boatCardY, innerW, boatCardH, 8,
+        {8, 30, 75}, 200, {5, 20, 55}, 220)
+    UICore.strokeRRect(nvg, boatCardX, boatCardY, innerW, boatCardH, 8,
+        UICore.C_GEM, 1.0, 80)
 
-    -- 左侧: "渔船等级" 标签 + 等级徽章 + 进度条
-    local leftW = innerW * 0.55
+    -- "渔船等级" 标签
     nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(100, 80, 50, 220))
+    nvgFontSize(nvg, 11)
+    nvgFillColor(nvg, nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 200))
     nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgText(nvg, boatCardX + 10, boatCardY + 8, "渔船等级")
+    nvgText(nvg, boatCardX + 10, boatCardY + 7, "渔船等级")
 
-    -- 等级徽章 (金色圆)
+    -- 等级徽章 (宝石蓝圆)
     local badgeR = 16
     local badgeCX = boatCardX + 10 + badgeR
     local badgeCY = boatCardY + 28 + badgeR
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, badgeCX, badgeCY, badgeR)
-    local badgePaint = nvgLinearGradient(nvg, badgeCX, badgeCY - badgeR, badgeCX, badgeCY + badgeR,
-        nvgRGBA(220, 180, 80, 255), nvgRGBA(180, 140, 50, 255))
-    nvgFillPaint(nvg, badgePaint)
-    nvgFill(nvg)
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, badgeCX, badgeCY, badgeR)
-    nvgStrokeColor(nvg, nvgRGBA(160, 120, 40, 200))
-    nvgStrokeWidth(nvg, 1.5)
-    nvgStroke(nvg)
-    nvgFontSize(nvg, 15)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, badgeCX, badgeCY, tostring(boatLv))
+    UICore.fillRRectGrad(nvg, badgeCX - badgeR, badgeCY - badgeR,
+        badgeR * 2, badgeR * 2, badgeR,
+        {30, 120, 220}, 255, {15, 80, 170}, 255)
+    UICore.strokeRRect(nvg, badgeCX - badgeR, badgeCY - badgeR,
+        badgeR * 2, badgeR * 2, badgeR, UICore.C_GEM, 1.5, 200)
+    UICore.strokeText(nvg, tostring(boatLv),
+        badgeCX, badgeCY, 15,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- Lv.X 文字
-    nvgFontSize(nvg, 14)
-    nvgFillColor(nvg, nvgRGBA(80, 60, 30, 230))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, badgeCX + badgeR + 6, badgeCY - 4, "Lv." .. boatLv)
+    UICore.strokeText(nvg, "Lv." .. boatLv,
+        badgeCX + badgeR + 6, badgeCY - 5, 13,
+        UICore.C_GEM, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
 
-    -- 经验/升级进度条 (用金币作为进度指标)
+    -- 进度条
+    local leftW = innerW * 0.55
     local barX = badgeCX + badgeR + 6
-    local barY = badgeCY + 10
-    local barW = leftW - (barX - boatCardX) - 8
-    local barH = 14
+    local barY = badgeCY + 9
+    local barW = boatCardX + leftW - barX - 6
+    local barH = 12
     if not isBoatMax then
         local nextCost = boatCfg.LEVELS[boatLv + 1].cost
         local progress = math.min(GameState.coins, nextCost)
-        drawProgressBar(nvg, barX, barY, barW, barH, progress, nextCost, 4)
+        UICore.drawProgressBar(nvg, barX, barY, barW, barH, 4,
+            progress / nextCost,
+            {5, 20, 55}, 200, UICore.C_GEM, 220)
     else
-        drawProgressBar(nvg, barX, barY, barW, barH, 1, 1, 4)
+        UICore.drawProgressBar(nvg, barX, barY, barW, barH, 4,
+            1.0, {5, 20, 55}, 200, UICore.C_GEM, 220)
     end
 
     -- 提示文字
-    nvgFontSize(nvg, 9)
-    nvgFillColor(nvg, nvgRGBA(130, 110, 80, 180))
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgText(nvg, boatCardX + 10, boatCardY + boatCardH - 16,
-        isBoatMax and "已达最高等级!" or "升级渔船可提升所有装备等级上限")
+    UICore.strokeTextA(nvg,
+        isBoatMax and "已达最高等级!" or "升级渔船可提升装备等级上限",
+        boatCardX + 10, boatCardY + boatCardH - 11, 9,
+        UICore.C_GEM, 170, UICore.C_STROKE, 1,
+        NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
 
     -- 右侧: 船只图片
     local boatImgSize = boatCardH - 16
     local boatImgX = boatCardX + leftW
     local boatImgY = boatCardY + 8
     if imgBoatIcon_ and imgBoatIcon_ > 0 then
-        local pat = nvgImagePattern(nvg, boatImgX, boatImgY, boatImgSize, boatImgSize, 0, imgBoatIcon_, 1.0)
-        nvgBeginPath(nvg)
-        nvgRect(nvg, boatImgX, boatImgY, boatImgSize, boatImgSize)
-        nvgFillPaint(nvg, pat)
-        nvgFill(nvg)
+        UICore.drawImageTL(nvg, imgBoatIcon_, boatImgX, boatImgY, boatImgSize, boatImgSize, 1.0)
     end
 
-    -- 渔船升级按钮 (右侧船图区域下方居中, 仅非满级时显示)
-    boatUpgConfirmRect_.x = 0
-    boatUpgConfirmRect_.y = 0
-    boatUpgConfirmRect_.w = 0
-    boatUpgConfirmRect_.h = 0
+    -- 渔船升级按钮
+    boatUpgConfirmRect_.x = 0; boatUpgConfirmRect_.y = 0
+    boatUpgConfirmRect_.w = 0; boatUpgConfirmRect_.h = 0
     if not isBoatMax then
         local rightAreaW = innerW - leftW
         local bbW = rightAreaW - 8
         local bbH = 22
         local bbX = boatCardX + leftW + (rightAreaW - bbW) * 0.5
         local bbY = boatCardY + boatCardH - bbH - 4
-        boatUpgConfirmRect_.x = bbX
-        boatUpgConfirmRect_.y = bbY
-        boatUpgConfirmRect_.w = bbW
-        boatUpgConfirmRect_.h = bbH
+        -- 存储实际屏幕坐标
+        boatUpgConfirmRect_.x = popCX + (bbX - popW * 0.5) * scale
+        boatUpgConfirmRect_.y = popCY + (bbY - popH * 0.5) * scale
+        boatUpgConfirmRect_.w = bbW * scale
+        boatUpgConfirmRect_.h = bbH * scale
         local nextCost = boatCfg.LEVELS[boatLv + 1].cost
         local canAfford = GameState.coins >= nextCost
         drawUpgradeBtn(nvg, bbX, bbY, bbW, bbH, nextCost, canAfford, imgCoin_)
     end
 
-    -- ========== 分隔线: 装备升级 ==========
+    -- ===== 分隔线: 装备升级 =====
     local divY = boatCardY + boatCardH + 8
-    -- 虚线
+    -- 渐变分隔线
+    local divPaint = nvgLinearGradient(nvg,
+        px + pad, divY, px + popW - pad, divY,
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 0),
+        nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 100))
     nvgBeginPath(nvg)
-    local dashLen = 5
-    local dashGap = 3
-    local dashX = popX + pad + 8
-    local dashEnd = popX + popW - pad - 8
-    while dashX < dashEnd do
-        nvgMoveTo(nvg, dashX, divY)
-        nvgLineTo(nvg, math.min(dashX + dashLen, dashEnd), divY)
-        dashX = dashX + dashLen + dashGap
-    end
-    nvgStrokeColor(nvg, nvgRGBA(190, 170, 140, 150))
+    nvgMoveTo(nvg, px + pad + 8, divY)
+    nvgLineTo(nvg, px + popW - pad - 8, divY)
+    nvgStrokePaint(nvg, divPaint)
     nvgStrokeWidth(nvg, 1)
     nvgStroke(nvg)
-    -- 中间文字
-    local divTextW = 70
-    nvgBeginPath(nvg)
-    nvgRect(nvg, popX + (popW - divTextW) * 0.5, divY - 8, divTextW, 16)
-    nvgFillColor(nvg, nvgRGBA(248, 244, 230, 255))
-    nvgFill(nvg)
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
-    nvgFillColor(nvg, nvgRGBA(140, 120, 80, 220))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, popX + popW * 0.5, divY, "装备升级")
+    UICore.strokeText(nvg, "装备升级",
+        px + popW * 0.5, divY, 12,
+        UICore.C_GEM, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
-    -- ========== 区域2: 4个装备行 ==========
-    local rowH = 70
-    local rowGap = 6
+    -- ===== 区域2: 4个装备行 =====
+    local rowH = 68
+    local rowGap = 5
     local rowStartY = divY + 14
 
     for idx, eq in ipairs(GameConfig.EQUIP.LIST) do
@@ -2414,106 +2713,97 @@ function WaterScene.renderBoatUpgradePopup(nvg, x, y, w, h)
         local upgCost = EconomySystem.calcEquipUpgradeCost(eq.id, eqLv)
 
         local rowY = rowStartY + (idx - 1) * (rowH + rowGap)
-        local rowX = popX + pad
+        local rowX = px + pad
         local rowW = innerW
 
-        -- 行底色 (略带圆角的白色卡片)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, rowX, rowY, rowW, rowH, 8)
-        nvgFillColor(nvg, nvgRGBA(255, 253, 245, 255))
-        nvgFill(nvg)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, rowX, rowY, rowW, rowH, 8)
-        nvgStrokeColor(nvg, nvgRGBA(210, 195, 165, 150))
-        nvgStrokeWidth(nvg, 1)
-        nvgStroke(nvg)
+        -- 行底色 (深蓝渐变卡片)
+        UICore.fillRRectGrad(nvg, rowX, rowY, rowW, rowH, 8,
+            {8, 35, 80}, 190, {5, 22, 58}, 210)
+        UICore.strokeRRect(nvg, rowX, rowY, rowW, rowH, 8,
+            UICore.C_GEM, 0.8, 60)
 
-        -- 左侧: 装备图标 (浅蓝底圆角方块)
+        -- 左侧: 装备图标 (深海蓝底圆角方块)
         local icoSize = rowH - 16
         local icoX = rowX + 8
-        local icoY = rowY + 8
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, icoX, icoY, icoSize, icoSize, 8)
-        nvgFillColor(nvg, nvgRGBA(200, 225, 245, 200))
-        nvgFill(nvg)
+        local icoY = rowY + (rowH - icoSize) * 0.5
+        UICore.fillRRectGrad(nvg, icoX, icoY, icoSize, icoSize, 8,
+            {15, 55, 120}, 200, {10, 38, 90}, 220)
+        UICore.strokeRRect(nvg, icoX, icoY, icoSize, icoSize, 8,
+            UICore.C_GEM, 1.0, 100)
         local eqImg = equipIcons_[eq.id]
         if eqImg and eqImg > 0 then
             local imgPad = 4
-            local pat = nvgImagePattern(nvg, icoX + imgPad, icoY + imgPad,
-                icoSize - imgPad * 2, icoSize - imgPad * 2, 0, eqImg, 1.0)
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, icoX + imgPad, icoY + imgPad,
-                icoSize - imgPad * 2, icoSize - imgPad * 2, 6)
-            nvgFillPaint(nvg, pat)
-            nvgFill(nvg)
+            UICore.drawImageTL(nvg, eqImg,
+                icoX + imgPad, icoY + imgPad,
+                icoSize - imgPad * 2, icoSize - imgPad * 2, 1.0)
         end
 
         -- 中间: 装备名 + 描述 + 等级 + 进度条
         local textX = icoX + icoSize + 8
-        local midW = rowW * 0.38
+        local midW = rowW * 0.35
         -- 装备名
-        nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 13)
-        nvgFillColor(nvg, nvgRGBA(60, 45, 20, 240))
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgText(nvg, textX, rowY + 8, eq.displayName)
+        UICore.strokeText(nvg, eq.displayName,
+            textX, rowY + 10, 13,
+            UICore.C_TITLE, UICore.C_STROKE, 2,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
         -- 描述
+        nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 9)
-        nvgFillColor(nvg, nvgRGBA(130, 110, 80, 200))
-        nvgText(nvg, textX, rowY + 24, eq.desc)
-
-        -- 等级 (居中偏右)
-        local lvX = textX + midW
-        nvgFontSize(nvg, 14)
-        nvgFillColor(nvg, nvgRGBA(60, 45, 20, 240))
+        nvgFillColor(nvg, nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 160))
         nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgText(nvg, lvX, rowY + 10, "Lv." .. eqLv)
+        nvgText(nvg, textX, rowY + 26, eq.desc)
 
-        -- 进度条 (当前等级/等级上限)
+        -- 等级
+        local lvX = textX + midW
+        UICore.strokeText(nvg, "Lv." .. eqLv,
+            lvX, rowY + 10, 13,
+            UICore.C_GEM, UICore.C_STROKE, 1.5,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+
+        -- 进度条
         local pBarX = textX
-        local pBarY = rowY + rowH - 22
-        local pBarW = lvX + 30 - textX
-        local pBarH = 12
-        drawProgressBar(nvg, pBarX, pBarY, pBarW, pBarH, eqLv, equipCapLv, 3)
+        local pBarY = rowY + rowH - 18
+        local pBarW = lvX + 28 - textX
+        local pBarH = 10
+        UICore.drawProgressBar(nvg, pBarX, pBarY, pBarW, pBarH, 3,
+            eqLv / math.max(1, equipCapLv),
+            {5, 20, 55}, 180, UICore.C_GEM, 210)
 
         -- 右侧: 升级按钮
         local btnW = 64
-        local btnH = 30
+        local btnH = 28
         local btnX = rowX + rowW - btnW - 8
         local btnY = rowY + (rowH - btnH) * 0.5
 
-        -- 存储按钮区域
         equipUpgRects_[eq.id] = equipUpgRects_[eq.id] or { x = 0, y = 0, w = 0, h = 0 }
 
         if isEqMax then
-            -- 满级: 灰色标签
-            equipUpgRects_[eq.id].x = 0
-            equipUpgRects_[eq.id].y = 0
-            equipUpgRects_[eq.id].w = 0
-            equipUpgRects_[eq.id].h = 0
-            nvgFontFace(nvg, "sans")
-            nvgFontSize(nvg, 11)
-            nvgFillColor(nvg, nvgRGBA(160, 140, 110, 180))
-            nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-            nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "已满级")
+            equipUpgRects_[eq.id].x = 0; equipUpgRects_[eq.id].y = 0
+            equipUpgRects_[eq.id].w = 0; equipUpgRects_[eq.id].h = 0
+            UICore.strokeTextA(nvg, "已满级",
+                btnX + btnW * 0.5, btnY + btnH * 0.5, 11,
+                UICore.C_GEM, 140, UICore.C_STROKE, 1,
+                NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         else
-            equipUpgRects_[eq.id].x = btnX
-            equipUpgRects_[eq.id].y = btnY
-            equipUpgRects_[eq.id].w = btnW
-            equipUpgRects_[eq.id].h = btnH
+            -- 存储实际屏幕坐标
+            equipUpgRects_[eq.id].x = popCX + (btnX - popW * 0.5) * scale
+            equipUpgRects_[eq.id].y = popCY + (btnY - popH * 0.5) * scale
+            equipUpgRects_[eq.id].w = btnW * scale
+            equipUpgRects_[eq.id].h = btnH * scale
             local canAfford = GameState.coins >= upgCost
             drawUpgradeBtn(nvg, btnX, btnY, btnW, btnH, upgCost, canAfford, imgCoin_)
         end
     end
 
-    -- ========== 底部提示 ==========
-    local tipY = popY + popH - 18
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 9)
-    nvgFillColor(nvg, nvgRGBA(150, 130, 90, 180))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, popX + popW * 0.5, tipY,
-        "升级装备可提升钓鱼效率，帮助你捕获更多高价值的鱼！")
+    -- ===== 底部提示 =====
+    local tipY = py + popH - 14
+    UICore.strokeTextA(nvg, "升级装备可提升钓鱼效率，帮助你捕获更多高价值的鱼！",
+        px + popW * 0.5, tipY, 9,
+        UICore.C_GEM, 130, UICore.C_STROKE, 1,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+
+    nvgRestore(nvg)
+    nvgGlobalAlpha(nvg, 1.0)
 end
 
 --- 检测船只升级按钮是否被点击
@@ -3440,33 +3730,26 @@ function WaterScene.renderBaitBtn(nvg, x, y, w, h)
     baitBtnRect_.w = btnW
     baitBtnRect_.h = btnH
 
-    -- 按钮底色 (圆角)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, bx, by, btnW, btnH, 10)
-    local bgPaint = nvgLinearGradient(nvg, bx, by, bx, by + btnH,
-        nvgRGBA(80, 140, 200, 220), nvgRGBA(50, 100, 160, 240))
-    nvgFillPaint(nvg, bgPaint)
-    nvgFill(nvg)
-    -- 边框
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, bx, by, btnW, btnH, 10)
-    nvgStrokeColor(nvg, nvgRGBA(120, 180, 240, 200))
-    nvgStrokeWidth(nvg, 1.5)
-    nvgStroke(nvg)
+    local r = 12
+    -- 深蓝渐变底板
+    UICore.fillRRectGrad(nvg, bx, by, btnW, btnH, r,
+        { 14, 65, 140 }, 220,
+        {  8, 42, 100 }, 240)
+    -- 青蓝描边
+    UICore.strokeRRect(nvg, bx, by, btnW, btnH, r, UICore.C_GEM, 1.5, 160)
 
-    -- 当前鱼饵图标
+    local cx = bx + btnW * 0.5
+    -- 当前鱼饵图标（描边）
     local baitCfg = GameConfig.BAIT_BY_ID[GameState.currentBait or "normal"]
-    local icon = baitCfg and baitCfg.icon or "worm"
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 22)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
-    nvgText(nvg, bx + btnW * 0.5, by + btnH * 0.38, icon)
+    local icon = baitCfg and baitCfg.icon or "🪱"
+    UICore.strokeText(nvg, icon, cx, by + btnH * 0.38,
+        22, UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
-    -- 标签文字
-    nvgFontSize(nvg, 9)
-    nvgFillColor(nvg, nvgRGBA(220, 240, 255, 230))
-    nvgText(nvg, bx + btnW * 0.5, by + btnH * 0.78, "鱼饵")
+    -- 标签文字（描边）
+    UICore.strokeText(nvg, "鱼饵", cx, by + btnH * 0.79,
+        10, UICore.C_GEM, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 end
 
 -- ============================================================================
@@ -3476,139 +3759,154 @@ end
 function WaterScene.renderBaitSelector(nvg, x, y, w, h)
     if not showBaitSelector_ then return end
 
-    -- 半透明遮罩
+    -- ===== 动画进度 =====
+    local t = UICore.easeOutCubic(baitSelectorT_)
+    local maskAlpha = math.floor(t * 140)
+
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, w, h)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
+    nvgFillColor(nvg, nvgRGBA(0, 0, 10, maskAlpha))
     nvgFill(nvg)
 
-    -- 弹窗尺寸
-    local popW = math.min(w * 0.85, 300)
+    if t <= 0 then return end
+
     local itemCount = #GameConfig.BAIT
     local itemH = 60
-    local headerH = 40
-    local footerH = 16
+    local headerH = 44
+    local footerH = 18
+    local popW = math.min(w * 0.85, 300)
     local popH = headerH + itemCount * itemH + footerH + 12
-    local popX = x + (w - popW) * 0.5
-    local popY = y + (h - popH) * 0.5
-    local popR = 12
+    local popCX = x + w * 0.5
+    local popCY = y + h * 0.5
     local pad = 10
 
-    -- 木纹边框
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, popX - 2, popY - 2, popW + 4, popH + 4, popR + 2)
-    nvgFillColor(nvg, nvgRGBA(80, 120, 170, 255))
-    nvgFill(nvg)
-    -- 内层蓝色底板
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, popX, popY, popW, popH, popR)
-    local bgPaint = nvgLinearGradient(nvg, popX, popY, popX, popY + popH,
-        nvgRGBA(230, 242, 255, 255), nvgRGBA(210, 228, 248, 255))
-    nvgFillPaint(nvg, bgPaint)
-    nvgFill(nvg)
+    -- 缩放动画变换
+    local scale = 0.85 + 0.15 * t
+    nvgGlobalAlpha(nvg, t)
+    nvgSave(nvg)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
 
-    -- 标题
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 16)
-    nvgFillColor(nvg, nvgRGBA(40, 70, 120, 255))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, popX + popW * 0.5, popY + headerH * 0.5, "选择鱼饵")
+    local px, py = 0, 0
+    local popR = 12
 
-    -- 关闭按钮 (右上角 X)
+    -- ===== 深海蓝面板 =====
+    UICore.drawPanel(nvg, px, py, popW, popH, popR)
+
+    -- ===== 标题栏 =====
+    local titleBarH = UICore.drawPanelTitle(nvg, px, py, popW, "选择鱼饵")
+
+    -- ===== 关闭按钮 =====
     local closeSize = 28
-    local closeX = popX + popW - closeSize - 4
-    local closeY = popY + 6
-    baitCloseRect_.x = closeX
-    baitCloseRect_.y = closeY
-    baitCloseRect_.w = closeSize
-    baitCloseRect_.h = closeSize
+    local closeX = px + popW - closeSize - 4
+    local closeY = py + 6
+    baitCloseRect_.x = popCX + (closeX - popW * 0.5) * scale
+    baitCloseRect_.y = popCY + (closeY - popH * 0.5) * scale
+    baitCloseRect_.w = closeSize * scale
+    baitCloseRect_.h = closeSize * scale
     nvgBeginPath(nvg)
     nvgCircle(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, closeSize * 0.4)
-    nvgFillColor(nvg, nvgRGBA(180, 70, 50, 220))
+    nvgFillColor(nvg, nvgRGBA(200, 70, 50, 230))
     nvgFill(nvg)
+    nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 14)
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgText(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, "✕")
 
-    -- 鱼饵列表
+    -- ===== 鱼饵列表 =====
     baitItemRects_ = {}
     local curBait = GameState.currentBait or "normal"
-    local listY = popY + headerH + 4
+    local listY = py + titleBarH + 4
 
     for i, bait in ipairs(GameConfig.BAIT) do
         local iy = listY + (i - 1) * itemH
-        local ix = popX + pad
+        local ix = px + pad
         local iw = popW - pad * 2
         local ih = itemH - 6
 
-        baitItemRects_[bait.id] = { x = ix, y = iy, w = iw, h = ih }
+        -- 存储屏幕坐标
+        baitItemRects_[bait.id] = {
+            x = popCX + (ix - popW * 0.5) * scale,
+            y = popCY + (iy - popH * 0.5) * scale,
+            w = iw * scale,
+            h = ih * scale
+        }
 
         local unlocked = GameConfig.isBaitUnlocked(bait.id)
         local isSelected = (bait.id == curBait)
 
-        -- 卡片底色
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, ix, iy, iw, ih, 8)
+        -- 行卡片底色
         if isSelected then
-            nvgFillColor(nvg, nvgRGBA(200, 230, 255, 255))
+            UICore.fillRRectGrad(nvg, ix, iy, iw, ih, 8,
+                {15, 70, 160}, 230, {10, 50, 130}, 245)
+            UICore.strokeRRect(nvg, ix, iy, iw, ih, 8, UICore.C_GEM, 2.0, 220)
         elseif unlocked then
-            nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
+            UICore.fillRRectGrad(nvg, ix, iy, iw, ih, 8,
+                {8, 38, 90}, 200, {5, 25, 65}, 215)
+            UICore.strokeRRect(nvg, ix, iy, iw, ih, 8, UICore.C_GEM, 0.8, 60)
         else
-            nvgFillColor(nvg, nvgRGBA(200, 200, 200, 180))
-        end
-        nvgFill(nvg)
-
-        -- 选中高亮边框
-        if isSelected then
-            nvgBeginPath(nvg)
-            nvgRoundedRect(nvg, ix, iy, iw, ih, 8)
-            nvgStrokeColor(nvg, nvgRGBA(60, 140, 220, 230))
-            nvgStrokeWidth(nvg, 2)
-            nvgStroke(nvg)
+            UICore.fillRRect(nvg, ix, iy, iw, ih, 8, {8, 20, 50}, 140)
+            UICore.strokeRRect(nvg, ix, iy, iw, ih, 8, {40, 80, 120}, 0.8, 60)
         end
 
         -- 图标
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 24)
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, unlocked and nvgRGBA(255, 255, 255, 255) or nvgRGBA(150, 150, 150, 200))
+        if unlocked then
+            nvgFillColor(nvg, nvgRGBA(255, 255, 255, 230))
+        else
+            nvgFillColor(nvg, nvgRGBA(100, 130, 160, 150))
+        end
         nvgText(nvg, ix + 24, iy + ih * 0.5, bait.icon)
 
         -- 名称
-        nvgFontSize(nvg, 14)
-        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-        nvgFillColor(nvg, unlocked and nvgRGBA(40, 60, 100, 255) or nvgRGBA(120, 120, 120, 200))
-        nvgText(nvg, ix + 48, iy + 8, bait.displayName)
+        local nameC = unlocked and UICore.C_TITLE or {80, 110, 140}
+        UICore.strokeText(nvg, bait.displayName,
+            ix + 48, iy + 9, 13,
+            nameC, UICore.C_STROKE, 2,
+            NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
 
         -- 描述
-        nvgFontSize(nvg, 11)
-        nvgFillColor(nvg, unlocked and nvgRGBA(80, 100, 140, 220) or nvgRGBA(140, 140, 140, 180))
+        nvgFontFace(nvg, "sans")
+        nvgFontSize(nvg, 10)
+        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+        if unlocked then
+            nvgFillColor(nvg, nvgRGBA(UICore.C_GEM[1], UICore.C_GEM[2], UICore.C_GEM[3], 170))
+        else
+            nvgFillColor(nvg, nvgRGBA(80, 110, 140, 150))
+        end
         nvgText(nvg, ix + 48, iy + 26, bait.desc)
 
-        -- 状态标签 (右侧)
-        nvgFontSize(nvg, 11)
-        nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
+        -- 右侧状态标签
         if isSelected then
-            nvgFillColor(nvg, nvgRGBA(40, 140, 60, 255))
-            nvgText(nvg, ix + iw - 8, iy + ih * 0.5, "使用中")
+            UICore.strokeTextA(nvg, "✔ 使用中",
+                ix + iw - 8, iy + ih * 0.5, 11,
+                UICore.C_GEM, 255, UICore.C_STROKE, 1.5,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         elseif unlocked then
-            nvgFillColor(nvg, nvgRGBA(60, 120, 200, 230))
-            nvgText(nvg, ix + iw - 8, iy + ih * 0.5, "可选择")
+            UICore.strokeTextA(nvg, "可选择",
+                ix + iw - 8, iy + ih * 0.5, 11,
+                {140, 200, 255}, 200, UICore.C_STROKE, 1,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         else
-            nvgFillColor(nvg, nvgRGBA(160, 130, 80, 200))
-            nvgText(nvg, ix + iw - 8, iy + ih * 0.5,
-                "鱼饵Lv." .. bait.unlockBaitLevel .. "解锁")
+            UICore.strokeTextA(nvg, "Lv." .. bait.unlockBaitLevel .. " 解锁",
+                ix + iw - 8, iy + ih * 0.5, 10,
+                {100, 140, 180}, 160, UICore.C_STROKE, 1,
+                NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
         end
     end
 
     -- 底部提示
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 9)
-    nvgFillColor(nvg, nvgRGBA(100, 130, 170, 180))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgText(nvg, popX + popW * 0.5, popY + popH - footerH,
-        "升级鱼饵装备可解锁更高级的鱼饵")
+    UICore.strokeTextA(nvg, "升级鱼饵装备可解锁更高级的鱼饵",
+        px + popW * 0.5, py + popH - 10, 9,
+        UICore.C_GEM, 120, UICore.C_STROKE, 1,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+
+    nvgRestore(nvg)
+    nvgGlobalAlpha(nvg, 1.0)
 end
 
 -- ============================================================================
@@ -3619,7 +3917,6 @@ function WaterScene.renderNewFishPopup(nvg, x, y, w, h)
     if not showNewFishPopup_ or not newFishPopupData_ then return end
 
     local progress = newFishPopupTimer_ / newFishPopupDuration_
-    -- 滑入动画 (前 0.15) + 停留 + 淡出 (后 0.2)
     local slideIn = math.min(1.0, newFishPopupTimer_ / 0.3)
     local fadeOut = progress > 0.8 and (1.0 - (progress - 0.8) / 0.2) or 1.0
     local alpha = fadeOut
@@ -3630,49 +3927,36 @@ function WaterScene.renderNewFishPopup(nvg, x, y, w, h)
     local toastW = math.min(w * 0.7, 240)
     local toastH = 56
     local toastX = x + (w - toastW) * 0.5
-    -- 从顶部滑入
     local targetY = y + 60
     local toastY = targetY - (1.0 - slideIn) * 30
-
     local a = math.floor(alpha * 255)
 
     nvgSave(nvg)
     nvgGlobalAlpha(nvg, alpha)
 
-    -- 底板 (深蓝渐变 + 金色边框)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, toastX, toastY, toastW, toastH, 10)
-    local bgP = nvgLinearGradient(nvg, toastX, toastY, toastX, toastY + toastH,
-        nvgRGBA(30, 60, 100, 240), nvgRGBA(20, 45, 80, 250))
-    nvgFillPaint(nvg, bgP)
-    nvgFill(nvg)
-    -- 金色边框
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, toastX, toastY, toastW, toastH, 10)
-    nvgStrokeColor(nvg, nvgRGBA(220, 180, 80, a))
-    nvgStrokeWidth(nvg, 1.5)
-    nvgStroke(nvg)
+    -- 底板 (深海蓝渐变 + 宝石蓝边框)
+    UICore.fillRRectGrad(nvg, toastX, toastY, toastW, toastH, 10,
+        {20, 60, 120}, 240, {12, 38, 85}, 250)
+    UICore.strokeRRect(nvg, toastX, toastY, toastW, toastH, 10,
+        UICore.C_GEM, 1.5, a)
 
     -- ★ 新发现！标题
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 11)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(255, 220, 100, a))
-    nvgText(nvg, toastX + toastW * 0.5, toastY + 6, "★ 新鱼种发现！")
+    UICore.strokeText(nvg, "★ 新鱼种发现！",
+        toastX + toastW * 0.5, toastY + 13, 11,
+        {255, 220, 100}, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- 鱼名 + 图标
-    local fishIcon = data.icon or "fish_sardine"
+    local fishIcon = data.icon or "🐟"
     local fishName = data.displayName or "未知"
     local qualityName = ""
     if data.qualityId and GameConfig.QUALITY[data.qualityId] then
         qualityName = GameConfig.QUALITY[data.qualityId].displayName .. " "
     end
-
-    nvgFontSize(nvg, 18)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, a))
-    nvgText(nvg, toastX + toastW * 0.5, toastY + toastH * 0.62,
-        fishIcon .. " " .. qualityName .. fishName)
+    UICore.strokeText(nvg, fishIcon .. " " .. qualityName .. fishName,
+        toastX + toastW * 0.5, toastY + toastH * 0.65, 17,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     nvgRestore(nvg)
 end
@@ -3695,50 +3979,38 @@ function WaterScene.renderAffixPopup(nvg, x, y, w, h)
     local toastW = math.min(w * 0.75, 260)
     local toastH = 62
     local toastX = x + (w - toastW) * 0.5
-    -- 位于新鱼弹窗下方 (或顶部如果没有新鱼弹窗)
     local baseY = showNewFishPopup_ and (y + 130) or (y + 60)
-    local targetY = baseY
-    local toastY = targetY - (1.0 - slideIn) * 30
-
+    local toastY = baseY - (1.0 - slideIn) * 30
     local a = math.floor(alpha * 255)
 
     nvgSave(nvg)
     nvgGlobalAlpha(nvg, alpha)
 
-    -- 底板 (紫色渐变 + 金色边框)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, toastX, toastY, toastW, toastH, 10)
-    local bgP = nvgLinearGradient(nvg, toastX, toastY, toastX, toastY + toastH,
-        nvgRGBA(80, 40, 120, 240), nvgRGBA(60, 30, 100, 250))
-    nvgFillPaint(nvg, bgP)
-    nvgFill(nvg)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, toastX, toastY, toastW, toastH, 10)
-    nvgStrokeColor(nvg, nvgRGBA(220, 180, 80, a))
-    nvgStrokeWidth(nvg, 1.5)
-    nvgStroke(nvg)
+    -- 底板 (深蓝青色渐变 + 宝石蓝边框, 统一海洋风)
+    UICore.fillRRectGrad(nvg, toastX, toastY, toastW, toastH, 10,
+        {10, 55, 110}, 240, {6, 35, 80}, 250)
+    UICore.strokeRRect(nvg, toastX, toastY, toastW, toastH, 10,
+        UICore.C_GEM, 1.5, a)
 
     -- ✦ 词条鱼！标题
-    nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 11)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(255, 200, 100, a))
-    nvgText(nvg, toastX + toastW * 0.5, toastY + 5, "✦ 词条鱼！")
+    UICore.strokeText(nvg, "✦ 词条鱼！",
+        toastX + toastW * 0.5, toastY + 13, 11,
+        {200, 240, 255}, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- 鱼名
-    nvgFontSize(nvg, 14)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, a))
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgText(nvg, toastX + toastW * 0.5, toastY + 26,
-        (data.displayName or "未知"))
+    UICore.strokeText(nvg, data.displayName or "未知",
+        toastX + toastW * 0.5, toastY + 31, 14,
+        UICore.C_TITLE, UICore.C_STROKE, 2,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     -- 词条摘要 + 价值倍率
     local summary = data.summary or ""
     local multStr = data.valueMult and string.format(" (×%.0f%%)", data.valueMult * 100) or ""
-    nvgFontSize(nvg, 11)
-    nvgFillColor(nvg, nvgRGBA(200, 180, 255, a))
-    nvgText(nvg, toastX + toastW * 0.5, toastY + toastH - 14,
-        summary .. multStr)
+    UICore.strokeTextA(nvg, summary .. multStr,
+        toastX + toastW * 0.5, toastY + toastH - 11, 11,
+        UICore.C_GEM, 220, UICore.C_STROKE, 1.5,
+        NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
 
     nvgRestore(nvg)
 end

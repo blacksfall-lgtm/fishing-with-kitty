@@ -10,6 +10,8 @@ local WaterRenderer   = require("ui.WaterRenderer")
 local FormatUtils     = require("utils.FormatUtils")
 local AffixConfig     = require("config.AffixConfig")
 local AffixSystem     = require("systems.AffixSystem")
+local UICore          = require("ui.UICore")
+local IconManager     = require("ui.IconManager")
 
 local BreedingScene = {}
 
@@ -30,6 +32,9 @@ local selectPopup_ = {
     scrollY = 0,
     fishList = {},
 }
+-- 弹窗动画
+local selectPopupT_ = 0
+local tipPopupT_    = 0
 
 -- 鱼信息 tips 弹窗
 local tipPopup_ = {
@@ -51,6 +56,15 @@ local wantReturn_ = false
 -- 滚动
 local scrollY_ = 0
 local maxScrollY_ = 0
+
+-- 养殖观赏区：游动鱼影列表
+-- { icon, x, y, vx, vy, size, phase, flipX, alpha }
+-- x/y 是相对于观赏区矩形的绝对像素坐标
+local breedingActors_ = {}
+local actorsSyncTimer_ = 0   -- 每 2s 同步一次槽位 → actors
+
+-- 观赏区尺寸缓存（每帧由 render 写入，update 读取）
+local aquaX_, aquaY_, aquaW_, aquaH_ = 0, 0, 390, 220
 
 -- ============================================================================
 -- 初始化
@@ -80,9 +94,115 @@ function BreedingScene.update(dt)
     if toastTimer_ > 0 then
         toastTimer_ = toastTimer_ - dt
     end
+    -- 弹窗动画
+    if selectPopup_.open then
+        selectPopupT_ = math.min(1.0, selectPopupT_ + dt / 0.25)
+    else
+        selectPopupT_ = math.max(0.0, selectPopupT_ - dt / 0.15)
+    end
+    if tipPopup_.open then
+        tipPopupT_ = math.min(1.0, tipPopupT_ + dt / 0.25)
+    else
+        tipPopupT_ = math.max(0.0, tipPopupT_ - dt / 0.15)
+    end
 
     -- 滚动
     local wheel = input.mouseMove.y  -- 这里不需要滚轮，暂不处理
+
+    -- ── 观赏区鱼影同步 ──
+    actorsSyncTimer_ = actorsSyncTimer_ - dt
+    if actorsSyncTimer_ <= 0 then
+        actorsSyncTimer_ = 2.0
+        BreedingScene.syncActors()
+    end
+
+    -- ── 观赏区鱼影运动 ──
+    local aw = aquaW_
+    local ah = aquaH_
+    for _, a in ipairs(breedingActors_) do
+        a.x = a.x + a.vx * dt * aw
+        a.y = a.y + a.vy * dt * ah
+        a.phase = a.phase + dt
+        -- 水平碰壁翻转
+        local margin = a.size * 0.5
+        if a.vx > 0 and a.x > aw - margin then
+            a.vx = -math.abs(a.vx)
+            a.flipX = true
+        elseif a.vx < 0 and a.x < margin then
+            a.vx = math.abs(a.vx)
+            a.flipX = false
+        end
+        -- 垂直软边界（保持在观赏区内）
+        local yMin = ah * 0.12 + margin
+        local yMax = ah * 0.88 - margin
+        if a.y < yMin then a.y = yMin; a.vy = math.abs(a.vy) end
+        if a.y > yMax then a.y = yMax; a.vy = -math.abs(a.vy) end
+    end
+end
+
+-- ============================================================================
+-- 观赏区鱼影同步：从养殖槽提取鱼种，生成/更新 actors
+-- ============================================================================
+function BreedingScene.syncActors()
+    -- 统计槽位中各鱼种数量
+    local fishCounts = {}  -- icon → count
+    for _, slot in pairs(GameState.breedingSlots) do
+        if slot and slot.fishId then
+            local cfg = GameConfig.FISH_BY_ID[slot.fishId]
+            if cfg then
+                local key = cfg.icon or ("fish_" .. cfg.name)
+                fishCounts[key] = (fishCounts[key] or 0) + 1
+                if slot.fish2 then
+                    fishCounts[key] = fishCounts[key] + 1
+                end
+            end
+        end
+    end
+
+    -- 目标数量：每条鱼对应 1 个 actor，上限 12 个
+    local desired = {}
+    for icon, cnt in pairs(fishCounts) do
+        for _ = 1, math.min(cnt, 3) do
+            table.insert(desired, icon)
+        end
+    end
+    -- 至少保留 3 个占位（空槽时也有鱼影）
+    if #desired == 0 then return end
+
+    -- 将现有 actors 按 icon 索引
+    local existing = {}
+    for _, a in ipairs(breedingActors_) do
+        existing[a.icon] = existing[a.icon] or {}
+        table.insert(existing[a.icon], a)
+    end
+
+    -- 重建 actors 列表
+    local aw = math.max(aquaW_, 100)
+    local ah = math.max(aquaH_, 80)
+    local newActors = {}
+    for _, icon in ipairs(desired) do
+        local pool = existing[icon]
+        if pool and #pool > 0 then
+            -- 复用已有
+            table.insert(newActors, table.remove(pool))
+        else
+            -- 新建：随机位置、速度
+            local sz = 36 + math.random() * 28
+            local spd = 0.06 + math.random() * 0.08
+            local dir = math.random() < 0.5
+            table.insert(newActors, {
+                icon  = icon,
+                x     = math.random() * (aw - sz) + sz * 0.5,
+                y     = ah * 0.2 + math.random() * (ah * 0.6),
+                vx    = dir and spd or -spd,
+                vy    = (math.random() - 0.5) * 0.04,
+                size  = sz,
+                phase = math.random() * math.pi * 2,
+                flipX = not dir,
+            })
+        end
+    end
+    breedingActors_ = newActors
 end
 
 -- ============================================================================
@@ -310,42 +430,185 @@ end
 function BreedingScene.render(nvg, x, y, w, h)
     clickRects_ = {}
 
-    -- 1) 水面背景
+    -- 布局参数
+    local hudH    = 46
+    local aquaH   = math.floor(h * 0.40)   -- 上 40%: 观赏区
+    local slotH   = h - hudH - aquaH - 4    -- 下方: 槽位面板
+
+    local aquaTop = y + hudH
+    local slotTop = aquaTop + aquaH + 4
+
+    -- 缓存观赏区尺寸供 update() 使用
+    aquaX_ = x; aquaY_ = aquaTop; aquaW_ = w; aquaH_ = aquaH
+
+    -- 1) 水面背景（覆盖全屏）
     WaterRenderer.render(nvg, x, y, w, h, time_)
 
     -- 2) 顶部 HUD
     BreedingScene.renderHUD(nvg, x, y, w, h)
 
-    -- 3) 网格槽位区域 (主体)
-    local gridTop = y + 48
-    local gridH = h - 58
-    BreedingScene.renderSlotGrid(nvg, x + 8, gridTop, w - 16, gridH)
+    -- 3) 观赏区（鱼影游动）
+    BreedingScene.renderAquarium(nvg, x, aquaTop, w, aquaH)
 
-    -- 4) 鱼选择弹窗
+    -- 4) 槽位面板
+    BreedingScene.renderSlotGrid(nvg, x + 6, slotTop, w - 12, slotH)
+
+    -- 5) 鱼选择弹窗
     if selectPopup_.open then
         BreedingScene.renderSelectPopup(nvg, x, y, w, h)
     end
 
-    -- 5) Tips 弹窗
+    -- 6) Tips 弹窗
     if tipPopup_.open then
         BreedingScene.renderTipPopup(nvg, x, y, w, h)
     end
 
     -- 6) Toast
     if toastTimer_ > 0 then
-        local alpha = math.min(1, toastTimer_ * 2) * 220
+        local sc = w / 390
+        sc = math.max(0.7, math.min(1.5, sc))
+        local alpha = math.min(1, toastTimer_ * 2)
+        local tx = x + w * 0.5
+        local ty = y + h * 0.42
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 16)
+        nvgFontSize(nvg, math.floor(15 * sc))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         local tw = nvgTextBounds(nvg, 0, 0, toastMsg_)
-        local tx = x + w * 0.5
-        local ty = y + h * 0.4
+        local pw = tw + math.floor(40 * sc)
+        local ph = math.floor(38 * sc)
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, alpha)
+        -- 面板背景
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx - tw * 0.5 - 16, ty - 14, tw + 32, 28, 14)
-        nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(alpha * 0.7)))
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgFillColor(nvg, nvgRGBA(8, 38, 82, 220))
         nvgFill(nvg)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, math.floor(alpha)))
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 180))
+        nvgStrokeWidth(nvg, 1.5)
+        nvgStroke(nvg)
+        -- 文字描边
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            nvgText(nvg, tx + math.cos(a) * 1.5, ty + math.sin(a) * 1.5, toastMsg_)
+        end
+        nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
         nvgText(nvg, tx, ty, toastMsg_)
+        nvgRestore(nvg)
+    end
+end
+
+-- ============================================================================
+-- 观赏区：水族缸风格，展示已养殖的鱼影
+-- ============================================================================
+
+function BreedingScene.renderAquarium(nvg, x, y, w, h)
+    -- ── 顶部渐变分隔线（HUD 下方入水感）──
+    local topFadePaint = nvgLinearGradient(nvg, x, y, x, y + 14,
+        nvgRGBA(60, 210, 248, 60), nvgRGBA(60, 210, 248, 0))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, 14)
+    nvgFillPaint(nvg, topFadePaint); nvgFill(nvg)
+
+    -- ── 焦散纹理动画（用 NanoVG 程序化波纹模拟）──
+    local waveCount = 8
+    for i = 1, waveCount do
+        local wx  = x + (i / waveCount) * w + math.sin(time_ * 0.7 + i * 1.3) * w * 0.08
+        local wy  = y + (i * 0.13 % 1.0) * h + math.cos(time_ * 0.5 + i * 0.9) * h * 0.06
+        local wr  = w * 0.04 + math.sin(time_ + i) * w * 0.012
+        local wa  = math.floor(8 + 6 * math.sin(time_ * 0.8 + i * 0.7))
+        nvgBeginPath(nvg)
+        nvgEllipse(nvg, wx, wy, wr, wr * 0.35)
+        nvgStrokeColor(nvg, nvgRGBA(120, 220, 255, wa))
+        nvgStrokeWidth(nvg, 1.0)
+        nvgStroke(nvg)
+    end
+
+    -- ── 水深渐变叠加（给整个观赏区加一层半透明深色）──
+    local depthPaint = nvgLinearGradient(nvg, x, y, x, y + h,
+        nvgRGBA(5, 25, 65, 30), nvgRGBA(3, 15, 45, 80))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y, w, h)
+    nvgFillPaint(nvg, depthPaint); nvgFill(nvg)
+
+    -- ── 绘制鱼影 actors ──
+    if #breedingActors_ > 0 then
+        nvgSave(nvg)
+        nvgScissor(nvg, x, y, w, h)
+        for _, a in ipairs(breedingActors_) do
+            -- 上下浮动偏移
+            local wobble = math.sin(a.phase * 1.2) * 4
+            local ax = x + a.x
+            local ay = y + a.y + wobble
+
+            -- 边缘淡出透明度
+            local edgeDist = math.min(a.x, w - a.x, a.y, h - a.y)
+            local edgeAlpha = math.min(1.0, edgeDist / (a.size * 0.8))
+            -- 微呼吸缩放
+            local breathScale = 1.0 + 0.03 * math.sin(a.phase * 0.8)
+            local drawSize = a.size * breathScale
+
+            nvgSave(nvg)
+            nvgTranslate(nvg, ax, ay)
+            if a.flipX then
+                nvgScale(nvg, -1, 1)
+            end
+
+            -- 阴影光晕（鱼下方）
+            local shadowPaint = nvgRadialGradient(nvg,
+                0, drawSize * 0.35,
+                drawSize * 0.1, drawSize * 0.55,
+                nvgRGBA(0, 10, 30, math.floor(60 * edgeAlpha)),
+                nvgRGBA(0, 10, 30, 0))
+            nvgBeginPath(nvg)
+            nvgEllipse(nvg, 0, drawSize * 0.35, drawSize * 0.55, drawSize * 0.18)
+            nvgFillPaint(nvg, shadowPaint); nvgFill(nvg)
+
+            -- 鱼图标
+            nvgGlobalAlpha(nvg, 0.82 * edgeAlpha)
+            IconManager.drawCentered(nvg, a.icon, 0, 0, drawSize)
+            nvgGlobalAlpha(nvg, 1.0)
+
+            nvgRestore(nvg)
+        end
+        nvgRestore(nvg)
+    else
+        -- 无鱼时显示提示
+        nvgFontFace(nvg, "sans")
+        nvgFontSize(nvg, 13)
+        nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+        nvgFillColor(nvg, nvgRGBA(100, 160, 210, 100))
+        nvgText(nvg, x + w * 0.5, y + h * 0.5, "放入鱼苗后，鱼儿会在这里游动 🐟")
+    end
+
+    -- ── 底部分隔线（入水感渐变）──
+    local bottomPaint = nvgLinearGradient(nvg, x, y + h - 10, x, y + h,
+        nvgRGBA(0, 10, 30, 0), nvgRGBA(0, 10, 30, 100))
+    nvgBeginPath(nvg); nvgRect(nvg, x, y + h - 10, w, 10)
+    nvgFillPaint(nvg, bottomPaint); nvgFill(nvg)
+
+    -- 底部 C_GEM 分隔线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, x + 10, y + h)
+    nvgLineTo(nvg, x + w - 10, y + h)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 80))
+    nvgStrokeWidth(nvg, 1.0)
+    nvgStroke(nvg)
+
+    -- ── 右上角：养殖中数量角标 ──
+    local activeCount = 0
+    for _, slot in pairs(GameState.breedingSlots) do
+        if slot and slot.fishId then activeCount = activeCount + 1 end
+    end
+    if activeCount > 0 then
+        local badgeStr = "🐡 " .. activeCount .. " 条"
+        nvgFontFace(nvg, "sans")
+        nvgFontSize(nvg, 11)
+        nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 160))
+        nvgText(nvg, x + w - 7, y + 6, badgeStr)
+        nvgFillColor(nvg, nvgRGBA(60, 210, 248, 200))
+        nvgText(nvg, x + w - 8, y + 5, badgeStr)
     end
 end
 
@@ -360,12 +623,19 @@ function BreedingScene.renderSlotGrid(nvg, gx, gy, gw, gh)
     nvgFillColor(nvg, nvgRGBA(5, 20, 45, 160))
     nvgFill(nvg)
 
-    -- 标题行
+    -- 标题行（6方向描边）
+    local titleStr = "养殖槽位 (" .. GameState.unlockedBreedingSlots .. "/" .. GameConfig.BREEDING.MAX_SLOTS .. ")"
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 14)
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(180, 220, 255, 200))
-    nvgText(nvg, gx + 10, gy + 6, "养殖槽位 (" .. GameState.unlockedBreedingSlots .. "/" .. GameConfig.BREEDING.MAX_SLOTS .. ")")
+    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+    local titleMidY = gy + 13
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 180))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, gx + 10 + math.cos(a) * 1.5, titleMidY + math.sin(a) * 1.5, titleStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(160, 220, 255, 220))
+    nvgText(nvg, gx + 10, titleMidY, titleStr)
 
     -- 网格参数: 4 列
     local cols = 4
@@ -666,11 +936,8 @@ end
 -- ============================================================================
 
 function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
-    -- 遮罩
-    nvgBeginPath(nvg)
-    nvgRect(nvg, sx, sy, sw, sh)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
-    nvgFill(nvg)
+    local t = UICore.easeOutCubic(tipPopupT_)
+    if t <= 0 then return end
 
     local fishCfg = GameConfig.FISH_BY_ID[tipPopup_.fishId]
     if not fishCfg then
@@ -681,17 +948,38 @@ function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
     local qCfg = GameConfig.QUALITY[tipPopup_.qualityId]
     local qc = qCfg.color
 
-    -- 弹窗面板
-    local popW = math.min(sw - 40, 280)
-    local popH = 260
-    local popX = sx + (sw - popW) * 0.5
-    local popY = sy + (sh - popH) * 0.5
+    -- 遮罩淡入
+    nvgBeginPath(nvg)
+    nvgRect(nvg, sx, sy, sw, sh)
+    nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(t * 140)))
+    nvgFill(nvg)
 
+    local popW = math.min(sw - 40, 280)
+    local popH = 270
+    local popCX = sx + sw * 0.5
+    local popCY = sy + sh * 0.5
+
+    -- scale-in 动画
+    local scale = 0.85 + 0.15 * t
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, t)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
+
+    local popX, popY = 0, 0
+
+    -- 面板背景渐变
+    local bgPaint = nvgLinearGradient(nvg, popX, popY, popX, popY + popH,
+        nvgRGBA(12, 40, 80, 250), nvgRGBA(8, 28, 60, 252))
     nvgBeginPath(nvg)
     nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
-    nvgFillColor(nvg, nvgRGBA(12, 30, 55, 245))
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(qc[1], qc[2], qc[3], 180))
+    -- 品质色边框
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
+    nvgStrokeColor(nvg, nvgRGBA(qc[1], qc[2], qc[3], 200))
     nvgStrokeWidth(nvg, 2)
     nvgStroke(nvg)
 
@@ -702,9 +990,9 @@ function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
 
     local imgData = fishImages_[fishCfg.name]
     if imgData and imgData.img > 0 then
-        local scale = imgSize / math.max(imgData.w, imgData.h)
-        local drawW = imgData.w * scale
-        local drawH = imgData.h * scale
+        local imgScale = imgSize / math.max(imgData.w, imgData.h)
+        local drawW = imgData.w * imgScale
+        local drawH = imgData.h * imgScale
         local drawX = imgCx - drawW * 0.5
         local drawY = imgCy
 
@@ -730,13 +1018,19 @@ function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
         nvgText(nvg, imgCx, imgCy + imgSize * 0.5, fishCfg.icon)
     end
 
-    -- 鱼名称
+    -- 鱼名称（8方向描边）
     local textY = popY + 20 + imgSize + 14
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 16)
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(qc[1], qc[2], qc[3], 240))
-    nvgText(nvg, popX + popW * 0.5, textY, fishCfg.displayName)
+    local nameCX = popX + popW * 0.5
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 220))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, nameCX + math.cos(a) * 2, textY + math.sin(a) * 2, fishCfg.displayName)
+    end
+    nvgFillColor(nvg, nvgRGBA(qc[1], qc[2], qc[3], 255))
+    nvgText(nvg, nameCX, textY, fishCfg.displayName)
 
     -- 品质
     textY = textY + 22
@@ -774,8 +1068,11 @@ function BreedingScene.renderTipPopup(nvg, sx, sy, sw, sh)
 
     -- "点击关闭" 提示
     nvgFontSize(nvg, 10)
-    nvgFillColor(nvg, nvgRGBA(120, 140, 160, 140))
-    nvgText(nvg, popX + popW * 0.5, popY + popH - 16, "点击任意位置关闭")
+    nvgFillColor(nvg, nvgRGBA(80, 140, 200, 130))
+    nvgText(nvg, popX + popW * 0.5, popY + popH - 14, "点击任意位置关闭")
+
+    nvgRestore(nvg)
+    nvgGlobalAlpha(nvg, 1.0)
 end
 
 -- ============================================================================
@@ -783,27 +1080,53 @@ end
 -- ============================================================================
 
 function BreedingScene.renderSelectPopup(nvg, sx, sy, sw, sh)
-    -- 遮罩
+    local t = UICore.easeOutCubic(selectPopupT_)
+    if t <= 0 then return end
+
+    -- 遮罩淡入
     nvgBeginPath(nvg)
     nvgRect(nvg, sx, sy, sw, sh)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
+    nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(t * 160)))
     nvgFill(nvg)
 
-    -- 弹窗面板
     local popW = math.min(sw - 30, 320)
     local popH = math.min(sh - 60, 400)
-    local popX = sx + (sw - popW) * 0.5
-    local popY = sy + (sh - popH) * 0.5
+    local popCX = sx + sw * 0.5
+    local popCY = sy + sh * 0.5
 
+    -- scale-in 动画
+    local scale = 0.85 + 0.15 * t
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, t)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
+
+    local popX, popY = 0, 0
+
+    -- 面板背景渐变
+    local bgPaint = nvgLinearGradient(nvg, popX, popY, popX, popY + popH,
+        nvgRGBA(12, 55, 108, 245), nvgRGBA(8, 38, 82, 250))
     nvgBeginPath(nvg)
     nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
-    nvgFillColor(nvg, nvgRGBA(15, 35, 65, 240))
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(80, 140, 200, 150))
-    nvgStrokeWidth(nvg, 1.5)
+    -- 边框
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 200))
+    nvgStrokeWidth(nvg, 2)
     nvgStroke(nvg)
 
-    -- 标题
+    -- 标题栏
+    local titleH = 44
+    local titlePaint = nvgLinearGradient(nvg, popX, popY, popX, popY + titleH,
+        nvgRGBA(20, 75, 140, 220), nvgRGBA(12, 55, 108, 200))
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, popX + 2, popY + 2, popW - 4, titleH, 12)
+    nvgFillPaint(nvg, titlePaint)
+    nvgFill(nvg)
+
     local slot = GameState.breedingSlots[selectPopup_.slotIndex]
     local titleStr = "选择鱼苗"
     if slot and slot.fish1 then
@@ -813,29 +1136,45 @@ function BreedingScene.renderSelectPopup(nvg, sx, sy, sw, sh)
 
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 15)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(220, 235, 255, 230))
-    nvgText(nvg, popX + popW * 0.5, popY + 12, titleStr)
+    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, popX + popW * 0.5 + math.cos(a) * 2, popY + titleH * 0.5 + math.sin(a) * 2, titleStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
+    nvgText(nvg, popX + popW * 0.5, popY + titleH * 0.5, titleStr)
 
     -- 关闭按钮
-    local closeSize = 24
-    local closeX = popX + popW - closeSize - 8
-    local closeY = popY + 8
-    nvgFontSize(nvg, 18)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(200, 100, 80, 220))
+    local closeSize = 28
+    local closeX = popX + popW - closeSize - 6
+    local closeY = popY + (titleH - closeSize) * 0.5
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, closeSize * 0.5)
+    nvgFillColor(nvg, nvgRGBA(180, 60, 50, 200))
+    nvgFill(nvg)
+    nvgFontSize(nvg, 15)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
     nvgText(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, "✕")
+
+    -- 关闭按钮点击区（近似屏幕坐标）
+    local screenCloseX = popCX + popW * 0.5 - closeSize - 6
+    local screenCloseY = popCY - popH * 0.5 + (titleH - closeSize) * 0.5
     table.insert(clickRects_, {
-        x = closeX, y = closeY, w = closeSize, h = closeSize,
+        x = screenCloseX, y = screenCloseY, w = closeSize, h = closeSize,
         action = "close_select",
     })
 
-    -- 鱼列表
+    -- 鱼列表 (注意：listY 从 titleH 后开始，避免覆盖标题)
     local listX = popX + 10
-    local listY = popY + 36
+    local listY = popY + titleH + 8
     local listW = popW - 20
-    local itemH = 48
-    local listH = popH - 48
+    local itemH = 52
+    local listH = popH - titleH - 16
+
+    -- 屏幕坐标（用于 clickRects，不受 NanoVG 变换影响）
+    local screenListX = popCX - popW * 0.5 + 10
+    local screenListTop = popCY - popH * 0.5 + titleH + 8
 
     nvgSave(nvg)
     nvgScissor(nvg, listX, listY, listW, listH)
@@ -846,31 +1185,39 @@ function BreedingScene.renderSelectPopup(nvg, sx, sy, sw, sh)
             goto continue
         end
 
-        -- 卡片
+        -- 卡片背景渐变
+        local cardPaint = nvgLinearGradient(nvg, listX, iy, listX, iy + itemH,
+            nvgRGBA(30, 70, 120, 210), nvgRGBA(18, 48, 90, 200))
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, listX, iy, listW, itemH, 6)
-        nvgFillColor(nvg, nvgRGBA(25, 55, 90, 200))
+        nvgRoundedRect(nvg, listX, iy, listW, itemH, 7)
+        nvgFillPaint(nvg, cardPaint)
         nvgFill(nvg)
-
-        -- 品质色条
+        -- 卡片边框
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, listX, iy, 3, itemH, 2)
+        nvgRoundedRect(nvg, listX, iy, listW, itemH, 7)
+        nvgStrokeColor(nvg, nvgRGBA(60, 140, 220, 80))
+        nvgStrokeWidth(nvg, 1)
+        nvgStroke(nvg)
+
+        -- 品质色条（左侧竖条）
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, listX, iy + 4, 4, itemH - 8, 2)
         nvgFillColor(nvg, nvgRGBA(fish.qualityColor[1], fish.qualityColor[2],
-                                   fish.qualityColor[3], 220))
+                                   fish.qualityColor[3], 240))
         nvgFill(nvg)
 
         -- 鱼图片 (小)
         local fishCfg = GameConfig.FISH_BY_ID[fish.fishId]
         local fishName = fishCfg and fishCfg.name or "sardine"
         local imgData = fishImages_[fishName]
-        local thumbSize = 36
-        local thumbX = listX + 8
+        local thumbSize = 38
+        local thumbX = listX + 10
         local thumbY = iy + (itemH - thumbSize) * 0.5
 
         if imgData and imgData.img > 0 then
-            local scale = thumbSize / math.max(imgData.w, imgData.h)
-            local dw = imgData.w * scale
-            local dh = imgData.h * scale
+            local thumbScale = thumbSize / math.max(imgData.w, imgData.h)
+            local dw = imgData.w * thumbScale
+            local dh = imgData.h * thumbScale
             local dx = thumbX + (thumbSize - dw) * 0.5
             local dy = thumbY + (thumbSize - dh) * 0.5
 
@@ -881,47 +1228,59 @@ function BreedingScene.renderSelectPopup(nvg, sx, sy, sw, sh)
             nvgFill(nvg)
         else
             nvgFontFace(nvg, "sans")
-            nvgFontSize(nvg, 22)
+            nvgFontSize(nvg, 24)
             nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
             nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
             nvgText(nvg, thumbX + thumbSize * 0.5, thumbY + thumbSize * 0.5, fish.icon)
         end
 
-        -- 名称 + 品质
-        local textX = thumbX + thumbSize + 6
+        -- 名称（6方向描边）
+        local textX = thumbX + thumbSize + 8
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, 13)
         nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, nvgRGBA(220, 235, 255, 220))
-        nvgText(nvg, textX, iy + itemH * 0.35,
-            fish.displayName .. " [" .. fish.qualityName .. "]")
+        local nameY = iy + itemH * 0.35
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+        for i = 0, 5 do
+            local a = i * math.pi / 3
+            nvgText(nvg, textX + math.cos(a) * 1.5, nameY + math.sin(a) * 1.5,
+                fish.displayName .. " [" .. fish.qualityName .. "]")
+        end
+        nvgFillColor(nvg, nvgRGBA(fish.qualityColor[1], fish.qualityColor[2],
+                                   fish.qualityColor[3], 240))
+        nvgText(nvg, textX, nameY, fish.displayName .. " [" .. fish.qualityName .. "]")
 
-        -- 数量 / 词条信息
+        -- 数量 / 词条信息（小字）
         nvgFontSize(nvg, 11)
+        local subY = iy + itemH * 0.72
         if fish.isAffix and fish.affixSummary then
             local highest = AffixSystem.getHighestRarity(fish.affixes)
             local rc = AffixConfig.RARITY[highest] or AffixConfig.RARITY[1]
             nvgFillColor(nvg, nvgRGBA(rc.color[1], rc.color[2], rc.color[3], 220))
-            nvgText(nvg, textX, iy + itemH * 0.7, "✦" .. fish.affixSummary)
+            nvgText(nvg, textX, subY, "✦" .. fish.affixSummary)
         else
-            nvgFillColor(nvg, nvgRGBA(160, 180, 200, 180))
-            nvgText(nvg, textX, iy + itemH * 0.7, "x" .. fish.count)
+            nvgFillColor(nvg, nvgRGBA(160, 200, 240, 180))
+            nvgText(nvg, textX, subY, "x" .. fish.count)
         end
 
-        -- 整行可点
+        -- 整行可点（使用屏幕坐标）
+        local screenIY = screenListTop + (idx - 1) * (itemH + 4) - selectPopup_.scrollY * scale
         local actionStr = "select_fish_" .. fish.fishId .. "_" .. fish.qualityId
         if fish.uid then
             actionStr = actionStr .. "_" .. fish.uid
         end
         table.insert(clickRects_, {
-            x = listX, y = iy, w = listW, h = itemH,
+            x = screenListX, y = screenIY, w = listW, h = itemH,
             action = actionStr,
         })
 
         ::continue::
     end
 
-    nvgRestore(nvg)
+    nvgRestore(nvg)   -- 释放 scissor
+
+    nvgRestore(nvg)   -- 释放 scale-in 变换
+    nvgGlobalAlpha(nvg, 1.0)
 end
 
 -- ============================================================================
@@ -929,46 +1288,76 @@ end
 -- ============================================================================
 
 function BreedingScene.renderHUD(nvg, x, y, w, h)
-    -- 半透明顶栏背景
+    local sc = w / 390
+    sc = math.max(0.7, math.min(1.5, sc))
+    local hudH = 46
+    local midY = y + hudH * 0.5
+
+    -- HUD 渐变背景
+    local bgPaint = nvgLinearGradient(nvg, x, y, x, y + hudH,
+        nvgRGBA(10, 50, 105, 235), nvgRGBA(6, 36, 80, 240))
     nvgBeginPath(nvg)
-    nvgRect(nvg, x, y, w, 44)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 100))
+    nvgRect(nvg, x, y, w, hudH)
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
+    -- 底部高光线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, x, y + hudH)
+    nvgLineTo(nvg, x + w, y + hudH)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 70))
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
 
     -- 返回按钮
-    local btnW = 56
-    local btnH = 26
-    local btnX = x + 8
-    local btnY = y + 9
-
+    local btnW = math.floor(64 * sc)
+    local btnH = math.floor(30 * sc)
+    local btnX = x + math.floor(10 * sc)
+    local btnY = midY - btnH * 0.5
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 8)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgFillColor(nvg, nvgRGBA(12, 48, 95, 220))
     nvgFill(nvg)
-
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 160))
+    nvgStrokeWidth(nvg, 1.5)
+    nvgStroke(nvg)
+    local btnMid = btnX + btnW * 0.5
+    local btnMidY = btnY + btnH * 0.5
     nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 12)
+    nvgFontSize(nvg, math.floor(13 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "← 返回")
-
-    table.insert(clickRects_, {
-        x = btnX, y = btnY, w = btnW, h = btnH,
-        action = "go_back",
-    })
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, btnMid + math.cos(a) * 1.5, btnMidY + math.sin(a) * 1.5, "← 返回")
+    end
+    nvgFillColor(nvg, nvgRGBA(200, 235, 255, 240))
+    nvgText(nvg, btnMid, btnMidY, "← 返回")
+    table.insert(clickRects_, { x = btnX, y = btnY, w = btnW, h = btnH, action = "go_back" })
 
     -- 标题
-    nvgFontSize(nvg, 17)
+    nvgFontSize(nvg, math.floor(16 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 240, 200, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "养殖场")
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, x + w * 0.5 + math.cos(a) * 2, midY + math.sin(a) * 2, "养殖场")
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
+    nvgText(nvg, x + w * 0.5, midY, "养殖场")
 
     -- 金币
-    nvgFontSize(nvg, 12)
+    local coinsStr = FormatUtils.formatNumber(GameState.coins) .. " 💰"
+    nvgFontSize(nvg, math.floor(12 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
-    nvgText(nvg, x + w - 10, btnY + btnH * 0.5,
-        FormatUtils.formatNumber(GameState.coins) .. " 金币")
+    nvgFillColor(nvg, nvgRGBA(80, 40, 0, 200))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, x + w - math.floor(10 * sc) + math.cos(a) * 1.5, midY + math.sin(a) * 1.5, coinsStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(255, 220, 40, 240))
+    nvgText(nvg, x + w - math.floor(10 * sc), midY, coinsStr)
 end
 
 return BreedingScene

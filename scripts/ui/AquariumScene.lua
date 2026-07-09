@@ -8,6 +8,7 @@ local AquariumSystem  = require("systems.AquariumSystem")
 local EconomySystem   = require("systems.EconomySystem")
 local FormatUtils     = require("utils.FormatUtils")
 local AffixConfig     = require("config.AffixConfig")
+local UICore          = require("ui.UICore")
 local AffixSystem     = require("systems.AffixSystem")
 
 local AquariumScene = {}
@@ -29,6 +30,8 @@ local selectPopup_ = {
     scrollY = 0,
     fishList = {},
 }
+-- 弹窗动画进度 0→1
+local selectPopupT_ = 0
 
 -- toast 提示
 local toastMsg_   = ""
@@ -79,6 +82,12 @@ function AquariumScene.update(dt)
     end
     if incomePopTimer_ > 0 then
         incomePopTimer_ = incomePopTimer_ - dt
+    end
+    -- 弹窗动画
+    if selectPopup_.open then
+        selectPopupT_ = math.min(1.0, selectPopupT_ + dt / 0.25)
+    else
+        selectPopupT_ = math.max(0.0, selectPopupT_ - dt / 0.15)
     end
 
     -- 更新气泡
@@ -298,30 +307,62 @@ function AquariumScene.render(nvg, x, y, w, h)
 
     -- 8) 收入弹出动画
     if incomePopTimer_ > 0 then
-        local alpha = math.min(1, incomePopTimer_) * 255
+        local alpha = math.min(1, incomePopTimer_)
         local popY = y + h * 0.35 - (2.0 - incomePopTimer_) * 30
+        local sc = w / 390
+        sc = math.max(0.7, math.min(1.5, sc))
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 20)
+        nvgFontSize(nvg, math.floor(20 * sc))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, nvgRGBA(255, 215, 0, math.floor(alpha)))
+        -- 描边
+        nvgFillColor(nvg, nvgRGBA(80, 40, 0, math.floor(alpha * 200)))
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            nvgText(nvg, x + w * 0.5 + math.cos(a) * 2, popY + math.sin(a) * 2, incomePopText_)
+        end
+        nvgFillColor(nvg, nvgRGBA(255, 220, 40, math.floor(alpha * 255)))
         nvgText(nvg, x + w * 0.5, popY, incomePopText_)
     end
 
     -- 9) Toast
     if toastTimer_ > 0 then
-        local alpha = math.min(1, toastTimer_ * 2) * 220
+        local sc = w / 390
+        sc = math.max(0.7, math.min(1.5, sc))
+        local alpha = math.min(1, toastTimer_ * 2)
+
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 16)
+        nvgFontSize(nvg, math.floor(15 * sc))
         nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
         local tw = nvgTextBounds(nvg, 0, 0, toastMsg_)
         local tx = x + w * 0.5
-        local ty = y + h * 0.4
+        local ty = y + h * 0.42
+
+        nvgSave(nvg)
+        nvgGlobalAlpha(nvg, alpha)
+
+        -- 面板背景
+        local pw = tw + math.floor(40 * sc)
+        local ph = math.floor(38 * sc)
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx - tw * 0.5 - 16, ty - 14, tw + 32, 28, 14)
-        nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(alpha * 0.7)))
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgFillColor(nvg, nvgRGBA(8, 38, 82, 220))
         nvgFill(nvg)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, math.floor(alpha)))
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, tx - pw * 0.5, ty - ph * 0.5, pw, ph, math.floor(12 * sc))
+        nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 180))
+        nvgStrokeWidth(nvg, 1.5)
+        nvgStroke(nvg)
+
+        -- 文字描边
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            nvgText(nvg, tx + math.cos(a) * 1.5, ty + math.sin(a) * 1.5, toastMsg_)
+        end
+        nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
         nvgText(nvg, tx, ty, toastMsg_)
+
+        nvgRestore(nvg)
     end
 end
 
@@ -651,12 +692,18 @@ function AquariumScene.renderSlotPanel(nvg, px, py, pw, ph)
     for i = 1, GameState.unlockedAquariumSlots do
         if GameState.aquariumSlots[i] then usedCount = usedCount + 1 end
     end
+    local titleStr = string.format("鱼缸槽位 (%d/%d)", usedCount, GameState.unlockedAquariumSlots)
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 13)
-    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(200, 220, 255, 220))
-    nvgText(nvg, px + 10, py + 6, string.format("鱼缸槽位 (%d/%d)",
-        usedCount, GameState.unlockedAquariumSlots))
+    nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+    local titleMidY = py + 13
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 5 do
+        local a = i * math.pi / 3
+        nvgText(nvg, px + 10 + math.cos(a) * 1.5, titleMidY + math.sin(a) * 1.5, titleStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(200, 230, 255, 230))
+    nvgText(nvg, px + 10, titleMidY, titleStr)
 
     -- 槽位卡片 (4列布局, 竖向紧凑)
     local cols = 4
@@ -846,114 +893,168 @@ end
 -- ============================================================================
 
 function AquariumScene.renderSelectPopup(nvg, sx, sy, sw, sh)
-    -- 遮罩
+    local t = UICore.easeOutCubic(selectPopupT_)
+    if t <= 0 then return end
+
+    -- 遮罩淡入
     nvgBeginPath(nvg)
     nvgRect(nvg, sx, sy, sw, sh)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 120))
+    nvgFillColor(nvg, nvgRGBA(0, 0, 0, math.floor(t * 160)))
     nvgFill(nvg)
 
-    -- 弹窗面板
+    -- 弹窗参数
     local popW = math.min(sw - 40, 320)
-    local popH = math.min(sh - 80, 380)
-    local popX = sx + (sw - popW) * 0.5
-    local popY = sy + (sh - popH) * 0.5
+    local popH = math.min(sh - 80, 400)
+    local popCX = sx + sw * 0.5
+    local popCY = sy + sh * 0.5
 
+    -- scale-in 动画
+    local scale = 0.85 + 0.15 * t
+    nvgSave(nvg)
+    nvgGlobalAlpha(nvg, t)
+    nvgTranslate(nvg, popCX, popCY)
+    nvgScale(nvg, scale, scale)
+    nvgTranslate(nvg, -popW * 0.5, -popH * 0.5)
+
+    local popX, popY = 0, 0
+
+    -- 面板背景渐变
+    local bgPaint = nvgLinearGradient(nvg, popX, popY, popX, popY + popH,
+        nvgRGBA(12, 55, 108, 245), nvgRGBA(8, 38, 82, 250))
     nvgBeginPath(nvg)
     nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
-    nvgFillColor(nvg, nvgRGBA(10, 25, 55, 240))
+    nvgFillPaint(nvg, bgPaint)
     nvgFill(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(60, 120, 180, 150))
-    nvgStrokeWidth(nvg, 1.5)
+    -- 边框
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, popX, popY, popW, popH, 14)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 200))
+    nvgStrokeWidth(nvg, 2)
     nvgStroke(nvg)
 
-    -- 标题
+    -- 标题栏底色
+    local titleH = 44
+    local titlePaint = nvgLinearGradient(nvg, popX, popY, popX, popY + titleH,
+        nvgRGBA(20, 75, 140, 220), nvgRGBA(12, 55, 108, 200))
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, popX + 2, popY + 2, popW - 4, titleH, 12)
+    nvgFillPaint(nvg, titlePaint)
+    nvgFill(nvg)
+
+    -- 标题文字
+    local titleStr = "选择鱼 (槽位 " .. selectPopup_.slotIndex .. ")"
     nvgFontFace(nvg, "sans")
     nvgFontSize(nvg, 16)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(220, 235, 255, 230))
-    nvgText(nvg, popX + popW * 0.5, popY + 12,
-        "选择鱼 (槽位 " .. selectPopup_.slotIndex .. ")")
+    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+    -- 描边
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, popX + popW * 0.5 + math.cos(a) * 2, popY + titleH * 0.5 + math.sin(a) * 2, titleStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 255))
+    nvgText(nvg, popX + popW * 0.5, popY + titleH * 0.5, titleStr)
 
     -- 关闭按钮
-    local closeSize = 24
-    local closeX = popX + popW - closeSize - 8
-    local closeY = popY + 8
-    nvgFontSize(nvg, 18)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(200, 100, 80, 220))
+    local closeSize = 28
+    local closeX = popX + popW - closeSize - 6
+    local closeY = popY + (titleH - closeSize) * 0.5
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, closeSize * 0.5)
+    nvgFillColor(nvg, nvgRGBA(180, 60, 50, 200))
+    nvgFill(nvg)
+    nvgFontSize(nvg, 15)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 240))
     nvgText(nvg, closeX + closeSize * 0.5, closeY + closeSize * 0.5, "✕")
-    table.insert(clickRects_, {
-        x = closeX, y = closeY, w = closeSize, h = closeSize,
-        action = "close_select",
-    })
 
-    -- 提示: 放入鱼会提供什么Buff
+    -- 提示行
     nvgFontSize(nvg, 11)
-    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
-    nvgFillColor(nvg, nvgRGBA(160, 190, 220, 180))
-    nvgText(nvg, popX + popW * 0.5, popY + 32,
-        "放入鱼可获得全局加成和定期金币收入")
+    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+    nvgFillColor(nvg, nvgRGBA(120, 185, 240, 180))
+    nvgText(nvg, popX + popW * 0.5, popY + titleH + 12, "放入鱼可获得全局加成和定期金币收入")
+
+    -- 分隔线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, popX + 10, popY + titleH + 22)
+    nvgLineTo(nvg, popX + popW - 10, popY + titleH + 22)
+    nvgStrokeColor(nvg, nvgRGBA(60, 150, 220, 80))
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
 
     -- 鱼列表
-    local listX = popX + 10
-    local listY = popY + 50
-    local listW = popW - 20
-    local itemH = 44
-    local listH = popH - 62
+    local listX = popX + 8
+    local listY = popY + titleH + 28
+    local listW = popW - 16
+    local itemH = 46
+    local listH = popH - (listY - popY) - 8
+
+    -- 注意：这里的 clickRects_ 坐标需要是原始屏幕坐标（不受变换影响）
+    -- 因此鱼列表点击区域在变换外登记，暂用近似值（scale≈1时误差可忽略）
+    local screenListX = popCX - popW * 0.5 + 8
+    local screenListY = popCY - popH * 0.5 + titleH + 28
 
     nvgSave(nvg)
     nvgScissor(nvg, listX, listY, listW, listH)
 
     for idx, fish in ipairs(selectPopup_.fishList) do
         local iy = listY + (idx - 1) * (itemH + 4) - selectPopup_.scrollY
-        if iy + itemH < listY or iy > listY + listH then
-            goto continue
-        end
+        if iy + itemH < listY or iy > listY + listH then goto continue end
 
-        -- 卡片
+        -- 卡片渐变背景
+        local cardPaint = nvgLinearGradient(nvg, listX, iy, listX, iy + itemH,
+            nvgRGBA(25, 60, 105, 210), nvgRGBA(15, 42, 80, 210))
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, listX, iy, listW, itemH, 6)
-        nvgFillColor(nvg, nvgRGBA(20, 45, 80, 200))
+        nvgRoundedRect(nvg, listX, iy, listW, itemH, 7)
+        nvgFillPaint(nvg, cardPaint)
         nvgFill(nvg)
-
-        -- 品质色条
+        -- 品质左色条
         nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, listX, iy, 3, itemH, 2)
+        nvgRoundedRect(nvg, listX, iy + 2, 4, itemH - 4, 2)
         nvgFillColor(nvg, nvgRGBA(fish.qualityColor[1], fish.qualityColor[2],
-                                   fish.qualityColor[3], 220))
+                                   fish.qualityColor[3], 230))
         nvgFill(nvg)
+        -- 轻描边
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, listX, iy, listW, itemH, 7)
+        nvgStrokeColor(nvg, nvgRGBA(60, 130, 200, 60))
+        nvgStrokeWidth(nvg, 1)
+        nvgStroke(nvg)
 
-        -- 图标
+        -- 鱼图标
         nvgFontFace(nvg, "sans")
-        nvgFontSize(nvg, 20)
+        nvgFontSize(nvg, 22)
         nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-        nvgText(nvg, listX + 10, iy + itemH * 0.4, fish.icon)
+        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 230))
+        nvgText(nvg, listX + 12, iy + itemH * 0.4, fish.icon)
 
-        -- 名称 + 品质
+        -- 鱼名+品质（带描边）
         nvgFontSize(nvg, 13)
-        nvgFillColor(nvg, nvgRGBA(220, 235, 255, 220))
-        nvgText(nvg, listX + 36, iy + itemH * 0.35,
-            fish.displayName .. " [" .. fish.qualityName .. "]")
+        local nameStr = fish.displayName .. " [" .. fish.qualityName .. "]"
+        nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+        for i = 0, 5 do
+            local a = i * math.pi / 3
+            nvgText(nvg, listX + 40 + math.cos(a) * 1.5, iy + itemH * 0.35 + math.sin(a) * 1.5, nameStr)
+        end
+        nvgFillColor(nvg, nvgRGBA(220, 238, 255, 230))
+        nvgText(nvg, listX + 40, iy + itemH * 0.35, nameStr)
 
-        -- 数量 + Buff 预览 / 词条信息
+        -- 数量/词条信息
         nvgFontSize(nvg, 10)
+        nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
         if fish.isAffix and fish.affixSummary then
-            -- 词条鱼: 显示词条摘要
             local badgeText = "✦" .. fish.affixSummary
             local highest = AffixSystem.getHighestRarity(fish.affixes)
             local rc = AffixConfig.RARITY[highest] or AffixConfig.RARITY[1]
             nvgFillColor(nvg, nvgRGBA(rc.color[1], rc.color[2], rc.color[3], 220))
-            nvgText(nvg, listX + 36, iy + itemH * 0.7, badgeText)
-
+            nvgText(nvg, listX + 40, iy + itemH * 0.72, badgeText)
             if AffixSystem.isFullAffix(fish.affixes) then
                 nvgFillColor(nvg, nvgRGBA(255, 215, 0, 255))
                 nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-                nvgText(nvg, listX + listW - 4, iy + itemH * 0.7, "★满词条")
+                nvgText(nvg, listX + listW - 6, iy + itemH * 0.72, "★满词条")
                 nvgTextAlign(nvg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
             end
         else
-            nvgFillColor(nvg, nvgRGBA(140, 170, 200, 180))
+            nvgFillColor(nvg, nvgRGBA(140, 185, 220, 190))
             local fishCfg = GameConfig.FISH_BY_ID[fish.fishId]
             local buffStr = "x" .. fish.count
             if fishCfg then
@@ -963,16 +1064,15 @@ function AquariumScene.renderSelectPopup(nvg, sx, sy, sw, sh)
                     buffStr = buffStr .. "  +" .. FormatUtils.formatPercent(bv)
                 end
             end
-            nvgText(nvg, listX + 36, iy + itemH * 0.7, buffStr)
+            nvgText(nvg, listX + 40, iy + itemH * 0.72, buffStr)
         end
 
-        -- 整行可点 (词条鱼带uid)
+        -- 点击区（近似屏幕坐标）
+        local screenIY = screenListY + (idx - 1) * (itemH + 4) - selectPopup_.scrollY
         local actionStr = "select_fish_" .. fish.fishId .. "_" .. fish.qualityId
-        if fish.uid then
-            actionStr = actionStr .. "_" .. fish.uid
-        end
+        if fish.uid then actionStr = actionStr .. "_" .. fish.uid end
         table.insert(clickRects_, {
-            x = listX, y = iy, w = listW, h = itemH,
+            x = screenListX, y = screenIY, w = listW, h = itemH,
             action = actionStr,
         })
 
@@ -980,6 +1080,17 @@ function AquariumScene.renderSelectPopup(nvg, sx, sy, sw, sh)
     end
 
     nvgRestore(nvg)
+
+    -- 关闭按钮点击区（近似屏幕坐标）
+    local screenCloseX = popCX + popW * 0.5 - closeSize - 6
+    local screenCloseY = popCY - popH * 0.5 + (titleH - closeSize) * 0.5
+    table.insert(clickRects_, {
+        x = screenCloseX, y = screenCloseY, w = closeSize, h = closeSize,
+        action = "close_select",
+    })
+
+    nvgRestore(nvg)
+    nvgGlobalAlpha(nvg, 1.0)
 end
 
 -- ============================================================================
@@ -987,40 +1098,86 @@ end
 -- ============================================================================
 
 function AquariumScene.renderHUD(nvg, x, y, w, h)
+    local sc = w / 390  -- 比例缩放因子（以 390px 逻辑宽为基准）
+    sc = math.max(0.7, math.min(1.5, sc))
+
+    local hudH = 46
+    local hudY = y
+
+    -- HUD 背景条
+    local bg = nvgLinearGradient(nvg, x, hudY, x, hudY + hudH,
+        nvgRGBA(10, 50, 105, 230), nvgRGBA(6, 36, 80, 235))
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, hudY, w, hudH)
+    nvgFillPaint(nvg, bg)
+    nvgFill(nvg)
+    -- 底部高光线
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, x, hudY + hudH)
+    nvgLineTo(nvg, x + w, hudY + hudH)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 70))
+    nvgStrokeWidth(nvg, 1)
+    nvgStroke(nvg)
+
+    local midY = hudY + hudH * 0.5
+
     -- 返回按钮
-    local btnW = 60
-    local btnH = 28
-    local btnX = x + 12
-    local btnY = y + 10
+    local btnW = math.floor(64 * sc)
+    local btnH = math.floor(30 * sc)
+    local btnX = x + math.floor(10 * sc)
+    local btnY = midY - btnH * 0.5
 
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 8)
-    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 140))
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgFillColor(nvg, nvgRGBA(12, 48, 95, 220))
     nvgFill(nvg)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 7)
+    nvgStrokeColor(nvg, nvgRGBA(60, 210, 248, 160))
+    nvgStrokeWidth(nvg, 1.5)
+    nvgStroke(nvg)
 
     nvgFontFace(nvg, "sans")
-    nvgFontSize(nvg, 13)
+    nvgFontSize(nvg, math.floor(14 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "← 返回")
+    -- 描边
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, btnX + btnW * 0.5 + math.cos(a) * 1.5,
+                     btnY + btnH * 0.5 + math.sin(a) * 1.5, "‹ 返回")
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 230))
+    nvgText(nvg, btnX + btnW * 0.5, btnY + btnH * 0.5, "‹ 返回")
 
     table.insert(clickRects_, {
         x = btnX, y = btnY, w = btnW, h = btnH,
         action = "go_back",
     })
 
-    -- 标题
-    nvgFontSize(nvg, 18)
+    -- 标题（居中）
+    nvgFontSize(nvg, math.floor(18 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(150, 210, 255, 230))
-    nvgText(nvg, x + w * 0.5, btnY + btnH * 0.5, "观赏鱼缸")
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 255))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        nvgText(nvg, x + w * 0.5 + math.cos(a) * 2, midY + math.sin(a) * 2, "观赏鱼缸")
+    end
+    nvgFillColor(nvg, nvgRGBA(235, 248, 255, 240))
+    nvgText(nvg, x + w * 0.5, midY, "观赏鱼缸")
 
-    -- 金币
-    nvgFontSize(nvg, 13)
+    -- 金币（右侧）
+    nvgFontSize(nvg, math.floor(13 * sc))
     nvgTextAlign(nvg, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
-    nvgFillColor(nvg, nvgRGBA(255, 215, 0, 230))
-    nvgText(nvg, x + w - 12, btnY + btnH * 0.5,
-        FormatUtils.formatNumber(GameState.coins) .. " 金币")
+    nvgFillColor(nvg, nvgRGBA(5, 18, 55, 200))
+    for i = 0, 7 do
+        local a = i * math.pi / 4
+        local coinStr = FormatUtils.formatNumber(GameState.coins) .. " 💰"
+        nvgText(nvg, x + w - 11 + math.cos(a) * 1.5, midY + math.sin(a) * 1.5, coinStr)
+    end
+    nvgFillColor(nvg, nvgRGBA(255, 220, 40, 235))
+    nvgText(nvg, x + w - 11, midY,
+        FormatUtils.formatNumber(GameState.coins) .. " 💰")
 end
 
 return AquariumScene
