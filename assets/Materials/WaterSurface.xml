@@ -1,7 +1,0 @@
-<material>
-    <technique name="Techniques/WaterSurface.xml" />
-    <texture unit="diffuse" name="Textures/water_base_tile.png" />
-    <texture unit="normal" name="Textures/water_normal.png" />
-    <texture unit="specular" name="Textures/water_caustic_line.png" />
-    <texture unit="emissive" name="Textures/sun_glitter_mask.png" />
-</material>

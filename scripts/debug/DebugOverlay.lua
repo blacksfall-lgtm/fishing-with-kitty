@@ -15,6 +15,7 @@ function DebugOverlay:Init(props)
     props.pointerEvents = "auto"
     props.backgroundColor = { 0, 0, 0, 0 }  -- 透明背景
 
+    ---@diagnostic disable-next-line: param-type-mismatch
     UI.Widget.Init(self, props)
 
     self.selectedRegion_ = nil   -- 当前选中的区域

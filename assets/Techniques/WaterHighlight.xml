@@ -1,3 +1,0 @@
-<technique vs="WaterHighlight" ps="WaterHighlight">
-    <pass name="alpha" blend="add" depthwrite="false" />
-</technique>

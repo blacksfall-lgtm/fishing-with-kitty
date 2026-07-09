@@ -274,6 +274,7 @@ end
 
 -- 自动钓鱼配置
 local ROD_CATCH_INTERVAL = 5.0       -- 每根鱼竿的自动钓鱼间隔 (秒)
+---@type number[]
 local rodTimers_ = { 0, 0, 0, 0 }   -- 每根鱼竿的计时器
 
 -- 前向声明 (实际定义在 boatState_ 之后)

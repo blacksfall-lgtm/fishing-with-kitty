@@ -167,6 +167,7 @@ function CodexSystem.getActiveBuffs()
     -- 鱼图鉴奖励
     for _, r in ipairs(GameConfig.CODEX_FISH_REWARDS) do
         if GameState.codexRewards["fish_" .. r.fishId] then
+            ---@diagnostic disable-next-line: assign-type-mismatch
             buffs[r.rewardType] = (buffs[r.rewardType] or 0) + r.value
         end
     end
@@ -174,6 +175,7 @@ function CodexSystem.getActiveBuffs()
     -- 词条图鉴奖励
     for _, r in ipairs(GameConfig.CODEX_AFFIX_REWARDS) do
         if GameState.codexRewards["affix_" .. r.rarityId] then
+            ---@diagnostic disable-next-line: assign-type-mismatch
             buffs[r.rewardType] = (buffs[r.rewardType] or 0) + r.value
         end
     end

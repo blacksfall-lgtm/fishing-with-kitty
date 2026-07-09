@@ -149,6 +149,7 @@ function AquariumSystem:recalculateBuffs()
                 local buffType, buffValue = EconomySystem.calcAquariumBuff(
                     fishCfg.fishType, slot.qualityId, slot.affixes)
                 if GameState.cachedBuffs[buffType] then
+                    ---@diagnostic disable-next-line: assign-type-mismatch
                     GameState.cachedBuffs[buffType] = GameState.cachedBuffs[buffType] + buffValue
                 end
             end

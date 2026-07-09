@@ -195,6 +195,7 @@ local function renderButton(nvg, node, sx, sy, sw, sh)
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, style.font_size or 14)
 
+        ---@type integer
         local align = NVG_ALIGN_MIDDLE
         local textX = sx + sw / 2
         if style.text_align == "left" then
@@ -231,15 +232,19 @@ local function renderText(nvg, node, sx, sy, sw, sh)
         nvgFontFace(nvg, "sans")
         nvgFontSize(nvg, style.font_size or 16)
 
+        ---@type integer
         local align = NVG_ALIGN_MIDDLE
         local textX = sx + 4
         if style.text_align == "center" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
             align = align + NVG_ALIGN_CENTER
             textX = sx + sw / 2
         elseif style.text_align == "right" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
             align = align + NVG_ALIGN_RIGHT
             textX = sx + sw - 4
         else
+            ---@diagnostic disable-next-line: assign-type-mismatch
             align = align + NVG_ALIGN_LEFT
         end
 

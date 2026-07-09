@@ -163,6 +163,7 @@ function ComboSystem.update(dt)
     while i <= #popups_ do
         popups_[i].time = popups_[i].time + dt
         if popups_[i].time >= CONFIG.popup.duration then
+            ---@diagnostic disable-next-line: param-type-mismatch
             table.remove(popups_, i)
         else
             i = i + 1

@@ -82,6 +82,8 @@ local anims_ = {}   -- CatchAnim[]
 ---@field cx number     木桶屏幕x
 ---@field cy number     木桶屏幕y
 ---@field dots table    飞溅水滴
+
+---@type LandingSplash[]
 local landingSplashes_ = {}
 
 ---@class CoinPopup  金币弹字效果
@@ -248,6 +250,7 @@ function CatchAnimSystem.update(dt)
         local cp = coinPopups_[k]
         cp.time = cp.time + dt
         if cp.time >= cp.duration then
+            ---@diagnostic disable-next-line: param-type-mismatch
             table.remove(coinPopups_, k)
         else
             k = k + 1
@@ -269,6 +272,7 @@ function CatchAnimSystem.update(dt)
             end
         end
         if ls.time >= CONFIG.landing.duration then
+            ---@diagnostic disable-next-line: param-type-mismatch
             table.remove(landingSplashes_, j)
         else
             j = j + 1

@@ -1,3 +1,0 @@
-<technique vs="FishShadowDistort" ps="FishShadowDistort">
-    <pass name="alpha" blend="alpha" depthwrite="false" />
-</technique>

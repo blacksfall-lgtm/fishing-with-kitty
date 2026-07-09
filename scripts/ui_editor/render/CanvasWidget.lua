@@ -35,6 +35,7 @@ function CanvasWidget:Init(props)
     props.pointerEvents = "auto"
     props.overflow = "hidden"
 
+    ---@diagnostic disable-next-line: param-type-mismatch
     UI.Widget.Init(self, props)
 
     ---@type table EditorState (injected from main)

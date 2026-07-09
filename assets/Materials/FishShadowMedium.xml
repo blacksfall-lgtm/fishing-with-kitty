@@ -1,6 +1,0 @@
-<material>
-    <technique name="Techniques/FishShadowDistort.xml" />
-    <texture unit="diffuse" name="Textures/fish_shadow_m.png" />
-    <texture unit="normal" name="Textures/water_normal.png" />
-    <parameter name="DistortStrength" value="0.014" />
-</material>
